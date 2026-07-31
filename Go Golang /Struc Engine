@@ -1,33 +1,39 @@
 package main
+
 import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 )
-type DNSGate struct {
-	UserIP string
-	Domain string
+type RootDNSServer struct {
+	IP        string
+	Port      int
+	CacheSize int
 }
-func (d DNSGate) ExecuteFirewall() string {
-	if d.Domain == "badpornwebsite.com" {
-    	return "[!] ALERT: TRAFFIC INJECTION BLOCKED BY STRUCT CORE!"
-	} else {
-      return "[+] SUCCESS: PATH IS CLEAN. DATA PASSED."
+func (s RootDNSServer) StartServer() {
+	fmt.Printf("[*] Launching Root Node Engine via Struct Method...\n")
+	fmt.Printf("[->] Binding to Network IP: %s\n", s.IP)
+	fmt.Printf("[->] Opening UDP Port: %d\n", s.Port)
+	fmt.Printf("[->] Loading In-Memory Trie Cache: %d records\n", s.CacheSize)
+	time.Sleep(1 * time.Second)
+	fmt.Println("\n[!!!] SUCCESS: PROJECT TIGER ROOT DNS SERVER IS NOW LIVE !!!")
 }
 func main() {
-      	cmd := exec.Command("clear")
-      	cmd.Stdout = os.Stdout
-      	cmd.Run()
-	      fmt.Println("=========================================")
-	      fmt.Println("[+] GO-LANG METHODS: ACTIVE SECURITY LAB ")
-       	fmt.Println("=========================================")
-	      guard1 := DNSGate{
-	     	UserIP: "192.168.1.15",
-	     	Domain: "badpornwebsite.com",
-	      }
-      	fmt.Println("[*] Running Security Check on Domain:", guard1.Domain
-      	decision := guard1.ExecuteFirewall()
-      	fmt.Println("  [->] Structural Decision:", decision)
-	
-      	fmt.Println("=========================================")
+	cmd := exec.Command("clear")
+	cmd.Stdout = os.Stdout
+	cmd.Run()
+
+	fmt.Println("=========================================")
+	fmt.Println("[+] Y4: PROJECT TIGER - STRUCT METHODS   ")
+	fmt.Println("=========================================")
+
+	myServer := RootDNSServer{
+		IP:        "127.0.0.1",
+		Port:         5300,
+		CacheSize: 500000,
+	}
+	myServer.StartServer()
+
+	fmt.Println("=========================================")
 }

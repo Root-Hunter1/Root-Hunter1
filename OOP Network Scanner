@@ -1,0 +1,43 @@
+import socket
+import subprocess
+import os
+os.system("clear")
+
+class HackerEngine:                                                                                                 def __init__(self):                                                                                                 self.target_domin = ""
+        self.target_ip = ""
+
+    def get_ip(self):                                                                                                   try:                                                                                                                self.target_ip = socket.gethostbyname(self.target_ip)                                                           print(f"[!] Target ip address: {self.target_ip}")
+            return True
+        except Exception as e:
+            print("[!] Error finding: {e}")
+            return Flase
+    def run_nmap(self):
+        print(f"[*] Runing Nmap Scan To {self.target_ip}")
+        print("_" * 40)
+
+        nmap_command = ["nmap", "-F", self.target_ip]
+        try:
+            result = subprocess.run(nmap_command, capture_output=True, text=True, check=True)
+            print(result.stdout)
+        except FileNotFoundError:
+            print("[!] Termux Not insted pkg install nmap")
+        except subprocess.CalledProcessError:
+            print("[!] Error: Nmap scan failed")
+
+    def start(self):
+        print("=" * 40)
+        print("[*] ClASS OOP DEVELOPER ENGINE")
+        print("=" * 40)
+
+        self.target_domin = input("Enter Target Domin: ")
+
+        if self.get_ip():
+            self.run_nmap()
+
+        print("[*] Engine Running Complete in Termux")
+        print("_" * 40)
+
+if __name__ == "__main__":
+
+    scanner = HackerEngine()
+    scanner.start()

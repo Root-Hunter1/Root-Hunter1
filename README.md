@@ -1,7 +1,6 @@
 <p align="center">
-  <img src="5fac881a-26c4-4a65-8903-c1c5a932ff42.png" width="100%">
+  <img src="5fac881a-26c4-4a65-8903-c1baca81ec85.png" width="100%">
 </p>
-
 
 # OOP Network Scanner
 

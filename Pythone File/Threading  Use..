@@ -25,7 +25,7 @@ def dns_query(server_packet,client_address, raw_packet, thread_id):
 
         time.sleep(1)
 
-        print(f"[Thread #{thread_id}] [+] [RCF 1035] Tansaction ID : 0x{txt_id:X} ({txt_id})")
+        print(f"[Thread #{thread_id}] [+] [RCF 1035] Tansaction ID : 0x{txt_id:X}")
         print(f"[Thread #{Thread_id}] [+] [RCF 1035] Tansaction ID : 0x{flag:X}")
         print(f"[Thread #{Thread_ip}] [+] [RCF 1035] Tansaction ID : {questions}")
         print(f"[Thread #{Thread_ip}) [-] Task Complete sending response back")

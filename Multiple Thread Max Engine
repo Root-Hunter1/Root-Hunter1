@@ -1,0 +1,56 @@
+import threading
+import socket
+import os
+from concurrent.futures import ProcessPoolExecutor
+
+os.system("clear")
+
+ip = "127.1.1.0"
+port = 5353
+
+print(f"[*] Connection Network Crande Bounded {ip}:{port}...")
+
+def process_packet(server, data, addr, thread_id):
+    print(f"[*] [packet {thread_id}] Backround Thread spanwed client: {addr}")
+    try:
+        tx_id = (data[0] << 8) + data[1]
+        print(f"[*] [packet {thread_id}] Transaction ID: 0x{tx_id:X}")
+    
+        reply = b"Hacker Thread Success"
+        server.sendto(reply, addr)
+    except Exception as e:
+        print(f"[*] [packet {thread_id}] Error prossing: {e}")
+
+def dns_root():
+    print("*" * 40)
+    print("[+] Y4-PROJECT: THE ROOT THREAD DNS")
+    print("*" * 40)
+    
+    server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server.bind((ip, port))
+  
+    max_workers = 16 
+    thread_count = 0
+    
+    try:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            while True:
+                data, addr = server.recvfrom(1024)
+                thread_count += 1
+
+                executor.submit(process_packet, server, data, addr, thread_count)
+                
+                thread_dns = threading.Thread(
+                    target=process_packet,
+                    args=(server, data, addr, thread_count)
+                )
+                thread_dns.daemon = True
+                thread_dns.start()
+                
+    except KeyboardInterrupt:
+        print("[*] Root Dns Shutdown Closing CRTL+C")
+    finally:
+        server.close()
+
+if __name__ == "__main__":
+    dns_root()

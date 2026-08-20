@@ -1,0 +1,129 @@
+import asyncio
+import time
+
+SERVER_IP = "127.0.1.0"
+SERVER_PORT = 5353
+
+class AsyncStressClient(asyncio.DatagramProtocol):
+    def __init__(self, total_reqs):
+        self.total_reqs = total_reqs
+        self.response_count = 0
+        self.transport = None
+
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        self.response_count += 1
+        print(f"[+] [Resp {self.response_count}] From {addr}: {data.decode(errors='ignore')}")
+
+    def error_received(self, exc):
+        print(f"[-] Socket error: {exc}")
+
+async def send_packet(transport, payload):
+    transport.sendto(payload)
+
+async def main():
+    print("=" * 60)
+    print(f"[*] Starting High-Speed Stress Test to {SERVER_IP}:{SERVER_PORT}")
+    print("=" * 60)
+
+    total_requests = 1000 
+    
+    loop = asyncio.get_running_loop()
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: AsyncStressClient(total_requests),
+        remote_addr=(SERVER_IP, SERVER_PORT)
+    )
+    mock_dns_payload = bytes([0xAA, 0xBB]) + b"\x00\x01\x00\x00"
+    
+    start_time = time.time()
+
+    tasks = [send_packet(transport, mock_dns_payload) for _ in range(total_requests)]
+    await asyncio.gather(*tasks)
+    
+    await asyncio.sleep(2.0)
+    
+    duration = time.time() - start_time - 2.0
+    print("=" * 60)
+    print(f"[+] Load Test Finished Successfully!")
+    print(f"[+] Packets Sent: {total_requests}")
+    print(f"[+] Responses Received: {protocol.response_count} / {total_requests}")
+    print(f"[+] Performance Duration: {duration:.4f} seconds")
+    print("=" * 60)
+    
+    transport.close()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[-] Testing interrupted by user.")
+
+#The New Code Reciver Code#✅
+
+import asyncio
+import os
+
+class Engine:
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
+        self.packet_count = 0
+
+    def process_packet(self, trasport, data, addr, current_id):
+        try:
+            if len(data) >= 2:
+                tx_id = (data[0] >> 8) + data[1]
+                print(f"[*] [packet {current_id}] Transaction ID: 0x{tx_id:X}")
+            else:
+                print(f"[*] [packet {current_id}] data short packet from{addr}...")
+            transport.sendto(b"SUCCESS ASYNCIO", client_address)
+            print("[*] Network Crad Bind [-] Succesfully")
+
+        except Exception as e:
+            print("[-] Error processing packet: {e}")
+
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        self.packet_count += 1
+
+        print(f"[*] packet received from {addr} passing to ayncio loop")
+
+async def main():
+    os.system("clear")
+
+    print("=" * 40)
+    print("[*] Y4-PROJECT: THE ASYNCIO ROOT ENGINE")
+    print("=" * 40)
+
+    ip = "127.0.1.0"
+    port = 5353
+
+    print(f"[*] Listing To Connection {ip}:{port}")
+
+    loop = asyncio.get_running_loop()
+
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: Engine(ip, port),
+        local_addr=(ip, port)
+    )
+
+    try:
+        await asyncio.Future()
+    except asyncio.CalledError:
+        pass
+    finally:
+        transport.close()
+
+if __name__=="__main__":
+    asyncio.run(main())
+
+~
+~
+~
+
+
+

@@ -1,0 +1,45 @@
+import socket
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+SERVER_IP = "127.1.1.0"
+SERVER_PORT = 5353
+
+def send_dns_request(request_id):
+    try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        client_socket.settimeout(2.0)
+        
+        # Creating a 2-byte fake DNS Transaction ID for testing
+        fake_dns_packet = bytes([0xAA, 0xBB]) + b"\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+        
+        start_time = time.time()
+        client_socket.sendto(fake_dns_packet, (SERVER_IP, SERVER_PORT))
+        
+        data, addr = client_socket.recvfrom(1024)
+        latency = (time.time() - start_time) * 1000
+        
+        print(f"[+] [Req {request_id}] Response from {addr}: {data.decode(errors='ignore')} | Latency: {latency:.2f}ms")
+        
+    except socket.timeout:
+        print(f"[-] [Req {request_id}] Request Timeout")
+    except Exception as e:
+        print(f"[-] [Req {request_id}] Error: {e}")
+    finally:
+        client_socket.close()
+
+def start_flood_test():
+    print("=" * 50)
+    print(f"[*] Starting Load Test to {SERVER_IP}:{SERVER_PORT}")
+    print("[*] Spawning 16 concurrent workers...")
+    print("=" * 50)
+    
+    max_workers = 16 
+    total_requests = 100 
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor.map(send_dns_request, range(1, total_requests + 1))
+
+if __name__ == "__main__":
+    start_flood_test()

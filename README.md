@@ -5,3 +5,221 @@
 ## 🛠️ Source Code 
 Here is the complete Python source code for this project. You can review the object-oriented structure below:
 
+# Copyright (C) 2026 Root-Hunter1
+# Licensed under the GNU General Public License v3 (GPL-3.0-only). See LICENSE.
+
+#!/usr/bin/env python3
+"""
+High-performance asyncio UDP server.
+
+Features:
+- asyncio DatagramProtocol with a bounded asyncio.Queue for backpressure
+- Worker pool (asyncio tasks) to process datagrams concurrently
+- Option to use SO_REUSEPORT for multi-process scaling
+- Option to use uvloop for better performance
+- Configurable recv buffer, queue size, workers
+- Periodic stats printing and graceful shutdown on SIGINT/SIGTERM
+"""
+import argparse
+import asyncio
+import logging
+import socket
+import signal
+import sys
+import time
+from typing import Dict, Any
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("udp-server")
+
+
+class UDPServerProtocol(asyncio.DatagramProtocol):
+    def __init__(self, queue: asyncio.Queue, stats: Dict[str, Any]):
+        self.queue = queue
+        self.stats = stats
+        self.transport = None
+
+    def connection_made(self, transport):
+        self.transport = transport
+        logger.info("UDP transport ready")
+
+    def datagram_received(self, data: bytes, addr):
+        # Quick, non-blocking work only
+        self.stats["recv"] += 1
+        self.stats["bytes_recv"] += len(data)
+        try:
+            self.queue.put_nowait((data, addr, time.time()))
+        except asyncio.QueueFull:
+            # Drop if overwhelmed
+            self.stats["dropped"] += 1
+            # Optionally log at debug level
+            if self.stats.get("log_drops"):
+                logger.warning("Queue full, dropping packet from %s", addr)
+
+    def error_received(self, exc):
+        logger.error("Socket error: %s", exc)
+        self.stats["errors"] += 1
+
+    def connection_lost(self, exc):
+        logger.info("Connection lost: %s", exc)
+
+
+async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event):
+    logger.info("Worker %d started", worker_id)
+    while not stop_event.is_set():
+        try:
+            item = await asyncio.wait_for(queue.get(), timeout=1.0)
+        except asyncio.TimeoutError:
+            continue
+        data, addr, ts = item
+        # Simulate processing (replace with real work)
+        try:
+            # Example: echo back a small response prefixing processing time
+            process_ts = time.time()
+            # Heavy CPU-bound work must be offloaded to ProcessPoolExecutor
+            resp = b"OK " + str(int((process_ts - ts) * 1000)).encode() + b"ms " + data[:200]
+            if protocol.transport is not None:
+                protocol.transport.sendto(resp, addr)
+            stats["processed"] += 1
+            stats["bytes_sent"] += len(resp)
+        except Exception as e:
+            stats["errors"] += 1
+            logger.exception("Worker %d processing error: %s", worker_id, e)
+        finally:
+            queue.task_done()
+    logger.info("Worker %d stopping", worker_id)
+
+
+async def stats_reporter(stats: Dict[str, Any], interval: float, stop_event: asyncio.Event):
+    last = time.time()
+    prev_recv = prev_proc = prev_dropped = prev_bytes = prev_sent = 0
+    while not stop_event.is_set():
+        await asyncio.sleep(interval)
+        now = time.time()
+        elapsed = now - last
+        last = now
+        recv = stats["recv"]
+        proc = stats["processed"]
+        dropped = stats["dropped"]
+        errors = stats["errors"]
+        bytes_recv = stats["bytes_recv"]
+        bytes_sent = stats["bytes_sent"]
+
+        rr = (recv - prev_recv) / elapsed
+        pr = (proc - prev_proc) / elapsed
+        dr = (dropped - prev_dropped) / elapsed
+        br = (bytes_recv - prev_bytes) / elapsed
+        bs = (bytes_sent - prev_sent) / elapsed
+
+        logger.info(
+            "stats: recv/s=%.1f proc/s=%.1f dropped/s=%.1f errors=%d in/s=%.1fKB/s out/s=%.1fKB/s queue=%d",
+            rr, pr, dr, errors, br / 1024, bs / 1024, stats.get("queue_size", 0),
+        )
+
+        prev_recv = recv
+        prev_proc = proc
+        prev_dropped = dropped
+        prev_bytes = bytes_recv
+        prev_sent = bytes_sent
+
+
+def build_socket(host: str, port: int, recv_buf: int, reuse_port: bool):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if reuse_port and hasattr(socket, "SO_REUSEPORT"):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    # Increase socket buffers for higher throughput
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, recv_buf)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, recv_buf)
+    except Exception:
+        logger.warning("Could not set socket buffer sizes")
+    sock.bind((host, port))
+    return sock
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="High-performance asyncio UDP server")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=9999)
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--queue", type=int, default=10000)
+    parser.add_argument("--recv-buf", type=int, default=4 * 1024 * 1024)
+    parser.add_argument("--stats-interval", type=float, default=5.0)
+    parser.add_argument("--reuse-port", action="store_true", help="Use SO_REUSEPORT (Linux/macOS)")
+    parser.add_argument("--uvloop", action="store_true", help="Use uvloop if available")
+    args = parser.parse_args()
+
+    if args.uvloop:
+        try:
+            import uvloop
+
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+            logger.info("uvloop enabled")
+        except Exception:
+            logger.warning("uvloop not available, continuing with default loop")
+
+    loop = asyncio.get_running_loop()
+
+    stats = {
+        "recv": 0,
+        "processed": 0,
+        "dropped": 0,
+        "errors": 0,
+        "bytes_recv": 0,
+        "bytes_sent": 0,
+        "log_drops": False,
+        "queue_size": args.queue,
+    }
+
+    queue = asyncio.Queue(maxsize=args.queue)
+    stop_event = asyncio.Event()
+
+    sock = build_socket(args.host, args.port, args.recv_buf, args.reuse_port)
+    protocol = UDPServerProtocol(queue, stats)
+    transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
+
+    # Start workers
+    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event)) for i in range(args.workers)]
+    stats_task = asyncio.create_task(stats_reporter(stats, args.stats_interval, stop_event))
+
+    # Signal handlers
+    def _on_signal():
+        logger.info("Shutdown signal received")
+        stop_event.set()
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, _on_signal)
+        loop.add_signal_handler(signal.SIGTERM, _on_signal)
+    except NotImplementedError:
+        # Windows: signal handlers for asyncio may not be supported the same way
+        logger.warning("Signal handlers not fully supported on this platform")
+
+    logger.info("UDP server listening on %s:%d (workers=%d, queue=%d, reuse_port=%s)",
+                args.host, args.port, args.workers, args.queue, args.reuse_port)
+
+    # Wait until stop_event is set
+    await stop_event.wait()
+    logger.info("Waiting for queue to drain (timeout 5s)...")
+    try:
+        await asyncio.wait_for(queue.join(), timeout=5.0)
+    except asyncio.TimeoutError:
+        logger.warning("Timeout waiting for queue to drain")
+
+    # Cancel workers
+    for w in workers:
+        w.cancel()
+    await asyncio.gather(*workers, return_exceptions=True)
+
+    stats_task.cancel()
+    await asyncio.gather(stats_task, return_exceptions=True)
+
+    transport.close()
+    logger.info("Server shutdown complete")
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Interrupted, exiting")

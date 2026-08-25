@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""
+Simple asyncio UDP load/test client.
+
+Sends many small datagrams concurrently to the target server to test throughput/latency.
+"""
+import argparse
+import asyncio
+import random
+import string
+import time
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("udp-client")
+
+
+async def sender(host, port, messages, concurrency, size):
+    loop = asyncio.get_running_loop()
+    transport, _ = await loop.create_datagram_endpoint(lambda: asyncio.DatagramProtocol(), remote_addr=(host, port))
+    sem = asyncio.Semaphore(concurrency)
+
+    async def send_one(i):
+        async with sem:
+            payload = f"{i}-".encode() + random.randbytes(max(0, size - 3))
+            transport.sendto(payload)
+            return len(payload)
+
+    start = time.time()
+    tasks = [asyncio.create_task(send_one(i)) for i in range(messages)]
+    results = await asyncio.gather(*tasks)
+    elapsed = time.time() - start
+    total = sum(results)
+    logger.info("Sent %d messages, total %d bytes in %.2fs -> %.2f msgs/s, %.2f KB/s",
+                messages, total, elapsed, messages / elapsed, (total / 1024) / elapsed)
+    transport.close()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=9999)
+    parser.add_argument("--messages", type=int, default=100000)
+    parser.add_argument("--concurrency", type=int, default=1000)
+    parser.add_argument("--size", type=int, default=64)
+    args = parser.parse_args()
+    asyncio.run(sender(args.host, args.port, args.messages, args.concurrency, args.size))
+
+
+if __name__ == "__main__":
+    main()

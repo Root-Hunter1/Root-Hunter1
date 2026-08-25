@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Root-Hunter1
+# Licensed under the GNU General Public License v3 (GPL-3.0-only). See LICENSE.
+
 import cv2
 import numpy as np
 import os

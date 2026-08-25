@@ -1,0 +1,69 @@
+import asyncio
+import os
+import time
+
+class AsyncDNSEngine:
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
+        self.packet_count = 0
+        
+        self.dns_cache = {
+            "google.com": "142.250.190.46",
+            "facebook.com": "157.240.22.35"
+        }
+    async def process_packet(self, transport, data, addr, current_id):
+        print(f"\n[Packet #{current_id}] 🚀 Async Worker Activated for: {addr}")
+        
+        try:
+            tx_id = (data[0] << 8) + data[1]
+            print(f"[Packet #{current_id}] [+] Transaction ID: 0x{tx_id:X}")
+            
+            await asyncio.sleep(0.5) 
+            
+            transport.sendto(b"PROJECT TIGER ASYNC SUCCESS", addr)
+            print(f"[Packet #{current_id}] [-] Response Sent safely.")
+            
+        except Exception as e:
+            print(f"[Packet #{current_id}] [!] Error: {e}")
+
+    def connection_made(self, transport):
+        self.transport = transport
+        print(f"[*] Raw UDP Port Socket successfully bounded to network card.")
+
+    def datagram_received(self, data, addr):
+        self.packet_count += 1
+        print(f"[!] Gate Keeper: Packet Received from {addr}! Passing to Async Loop...")
+        
+        asyncio.create_task(self.process_packet(self.transport, data, addr, self.packet_count))
+
+async def main():
+    os.system("clear")
+    print("=========================================")
+    print("[+] PROJECT TIGER - ASYNCIO CORE ENGINE  ")
+    print("=========================================")
+    
+    ip = "127.0.0.1"
+    port = 5353
+    
+    print(f"[*] Spawning Async Event Loop...")
+    print(f"[*] Server Listening on {ip}:{port}...")
+    print("[*] Ready to scale for 100 Million Users without getting jammed...")
+    print("-" * 55)
+    
+    loop = asyncio.get_running_loop()
+    
+    dns_engine = AsyncDNSEngine(ip, port)
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: dns_engine,
+        local_addr=(ip, port)
+    )
+    
+    try:
+        await asyncio.sleep(3600)  
+    except asyncio.CancelledError:
+        pass
+    finally:
+        transport.close()
+if __name__ == "__main__":
+    asyncio.run(main())

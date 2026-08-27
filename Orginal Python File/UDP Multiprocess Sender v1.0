@@ -1,0 +1,155 @@
+# Copyright (C) 2026 Root-Hunter1
+# Licensed under the GNU General Public License v3 (GPL-3.0-only). See LICENSE.
+
+#!/usr/bin/env python3
+"""
+Multiprocess / multi-worker UDP sender for stress-testing your OWN server only.
+
+SAFETY: You MUST pass --confirm I-OWN-THIS to enable sending. Without it the script exits.
+Only run against hosts you own or are authorized to test.
+
+Features:
+- Multiple processes, each with multiple worker threads.
+- Configurable packets-per-second (pps) per worker, payload size, duration.
+- Central stats aggregation and simple report.
+"""
+from __future__ import annotations
+import argparse
+import multiprocessing as mp
+import threading
+import socket
+import time
+import os
+import sys
+import random
+
+def sender_worker(host: str, port: int, pps: float, payload: bytes, duration: float, stats_q: mp.Queue, worker_id: int):
+    """
+    Worker thread in a process — sends UDP packets to (host,port).
+    pps: packets per second (0 means as-fast-as-possible)
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # Optional tuning: increase send buffer size (platform dependent, may require privileges)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4 * 1024 * 1024)
+    except Exception:
+        pass
+
+    interval = 1.0 / pps if pps and pps > 0 else 0.0
+    end_time = time.time() + duration
+    sent = 0
+    # Use local randomization to avoid perfectly synchronized bursts
+    jitter = interval * 0.05 if interval > 0 else 0.0
+
+    while time.time() < end_time:
+        try:
+            sock.sendto(payload, (host, port))
+        except Exception:
+            # silently continue; you may log exceptions if desired
+            pass
+        sent += 1
+        if interval > 0:
+            # sleep with small jitter
+            sleep_time = interval + (random.uniform(-jitter, jitter))
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+    stats_q.put(("sent", sent))
+    sock.close()
+
+def process_worker(proc_idx: int, host: str, port: int, workers_per_proc: int, pps: float, payload_size: int, duration: float, stats_q: mp.Queue):
+    """
+    One process that spawns worker threads.
+    """
+    payload = os.urandom(payload_size)  # random payload to avoid compression/optimizations
+    threads = []
+    for w in range(workers_per_proc):
+        t = threading.Thread(
+            target=sender_worker,
+            args=(host, port, pps, payload, duration, stats_q, w+1),
+            daemon=False
+        )
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+def aggregate_stats(stats_q: mp.Queue, expected_reports: int, timeout: float = 5.0):
+    total_sent = 0
+    received = 0
+    start = time.time()
+    # Wait until we get expected_reports or timeout after processes finished
+    while received < expected_reports:
+        try:
+            tag, val = stats_q.get(timeout=timeout)
+        except Exception:
+            break
+        if tag == "sent":
+            total_sent += int(val)
+            received += 1
+    elapsed = time.time() - start
+    return total_sent
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Multiprocess UDP sender (FOR AUTHORIZED TESTING ONLY)")
+    p.add_argument("--host", required=True, help="Target host (IP or hostname)")
+    p.add_argument("--port", type=int, default=9999, help="Target UDP port")
+    p.add_argument("--processes", type=int, default=4, help="Number of processes")
+    p.add_argument("--workers-per-process", type=int, default=4, help="Worker threads per process")
+    p.add_argument("--pps", type=float, default=500.0, help="Packets per second per worker (0 = as-fast-as-possible)")
+    p.add_argument("--payload-size", type=int, default=256, help="UDP payload size in bytes")
+    p.add_argument("--duration", type=float, default=10.0, help="Duration to run in seconds")
+    p.add_argument("--confirm", required=True, help='Safety token. MUST be exactly: "I-OWN-THIS" to run')
+    p.add_argument("--report-interval", type=float, default=1.0, help="(internal) stats poll interval")
+    return p.parse_args()
+
+def main():
+    args = parse_args()
+    if args.confirm != "I-OWN-THIS":
+        print("Safety confirmation missing or incorrect. To run, pass --confirm I-OWN-THIS")
+        sys.exit(1)
+
+    # Safety check: disallow remote public targets by default unless explicitly localhost or private CIDR?
+    # We only warn; you are responsible.
+    print("WARNING: Make sure you have authorization to test the target.")
+    print(f"Target: {args.host}:{args.port}  processes={args.processes} workers/proc={args.workers_per_process} pps={args.pps} payload={args.payload_size}B duration={args.duration}s")
+    time.sleep(1.0)
+
+    ctx = mp.get_context("spawn")
+    stats_q = ctx.Queue()
+    procs = []
+    start_time = time.time()
+    expected_reports = args.processes * args.workers_per_process
+
+    for i in range(args.processes):
+        p = ctx.Process(
+            target=process_worker,
+            args=(i, args.host, args.port, args.workers_per_process, args.pps, args.payload_size, args.duration, stats_q),
+            daemon=False
+        )
+        p.start()
+        procs.append(p)
+
+    # Wait for processes to finish
+    for p in procs:
+        p.join()
+
+    total_sent = 0
+    # collect all reports from queue
+    while not stats_q.empty():
+        try:
+            tag, val = stats_q.get_nowait()
+        except Exception:
+            break
+        if tag == "sent":
+            total_sent += int(val)
+
+    elapsed = time.time() - start_time
+    achieved_pps = total_sent / elapsed if elapsed > 0 else 0.0
+    print("="*60)
+    print(f"Finished. Duration: {elapsed:.2f}s  Total packets sent: {total_sent}  Achieved pps: {achieved_pps:.2f}")
+    print(f"Approx bytes sent: {total_sent * args.payload_size:,} bytes")
+    print("="*60)
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,135 @@
+# Copyright (C) 2026 Root-Hunter1
+# Licensed under the GNU General Public License v3 (GPL-3.0-only). See LICENSE.
+
+#!/usr/bin/env python3
+"""
+Simple multiprocessing UDP server.
+
+- Main process binds the UDP socket and receives datagrams.
+- Incoming (data, addr) tuples are put onto a multiprocessing.Queue.
+- Worker processes read from the queue, process the request, and send responses
+  using their own UDP socket.
+
+Run: python server.py
+"""
+import multiprocessing as mp
+import socket
+import time
+import signal
+import sys
+from typing import Tuple
+
+HOST = "0.0.0.0"
+PORT = 9999
+WORKER_COUNT = 4
+QUEUE_MAXSIZE = 100
+SOCKET_TIMEOUT = 1.0  # seconds, so the main loop can check for shutdown
+
+
+def worker_loop(task_queue: mp.Queue, worker_id: int):
+    """Worker process: receives (data, addr) from the queue, processes it, and replies."""
+    # Each worker creates its own sending socket (UDP is connectionless)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    print(f"[worker-{worker_id}] started (pid={mp.current_process().pid})")
+
+    try:
+        while True:
+            item = task_queue.get()
+            if item is None:
+                # Sentinel to shut down
+                print(f"[worker-{worker_id}] received shutdown sentinel")
+                break
+
+            data, addr = item
+            # Simulate CPU-bound processing (replace with actual work)
+            start = time.perf_counter()
+            # Example CPU work: small CPU-bound loop (adjust as needed)
+            s = 0
+            for i in range(50000):
+                s += i * i
+            duration = time.perf_counter() - start
+
+            # Build a response
+            resp = (
+                f"worker={worker_id} pid={mp.current_process().pid} "
+                f"processed_bytes={len(data)} cpu_ms={int(duration*1000)}"
+            ).encode("utf-8")
+            try:
+                sock.sendto(resp, addr)
+            except Exception as e:
+                print(f"[worker-{worker_id}] failed to send to {addr}: {e}")
+    finally:
+        sock.close()
+        print(f"[worker-{worker_id}] exiting")
+
+
+def run_server(host: str = HOST, port: int = PORT, workers: int = WORKER_COUNT):
+    mp.set_start_method("spawn", force=True)  # safe on macOS/Windows
+    task_queue: mp.Queue = mp.Queue(maxsize=QUEUE_MAXSIZE)
+
+    # Start worker processes
+    procs = []
+    for i in range(workers):
+        p = mp.Process(target=worker_loop, args=(task_queue, i + 1), daemon=False)
+        p.start()
+        procs.append(p)
+
+    # Setup main UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, port))
+    sock.settimeout(SOCKET_TIMEOUT)
+
+    print(f"[main] UDP server listening on {host}:{port} (workers={workers})")
+
+    # Graceful shutdown handling
+    stop_requested = mp.Event()
+
+    def _signal_handler(signum, frame):
+        print(f"\n[main] signal {signum} received, shutting down...")
+        stop_requested.set()
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
+    try:
+        while not stop_requested.is_set():
+            try:
+                data, addr = sock.recvfrom(65536)  # large buffer for UDP datagrams
+            except socket.timeout:
+                continue  # loop back and check for stop_requested
+            except Exception as e:
+                print(f"[main] recvfrom error: {e}")
+                continue
+
+            # Try to enqueue the task without blocking forever
+            try:
+                task_queue.put_nowait((data, addr))
+            except mp.queues.Full:
+                # Queue is full: drop or handle backpressure here
+                print(f"[main] task queue full; dropping packet from {addr}")
+                # optionally send NACK:
+                try:
+                    sock.sendto(b"server-busy", addr)
+                except Exception:
+                    pass
+
+    finally:
+        # Tell workers to exit
+        print("[main] sending shutdown sentinel to workers...")
+        for _ in procs:
+            task_queue.put(None)
+
+        # Join workers
+        for p in procs:
+            p.join(timeout=5)
+            if p.is_alive():
+                print(f"[main] worker pid={p.pid} did not exit in time; terminating")
+                p.terminate()
+        sock.close()
+        print("[main] server stopped")
+
+
+if __name__ == "__main__":
+    run_server()

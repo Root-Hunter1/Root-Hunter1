@@ -8,9 +8,9 @@ print("=" * 50)
 print("[+] Y4 PROJECT: TIGER PYTHON CALCULATOR v2.0")
 print("=" * 50)
 
-history = []  # অপারেশন history সংরক্ষণের জন্য
+history = [] 
 
-while True:  # বারবার চলার জন্য loop
+while True:  
     try:
         num1 = float(input("\n[+] Enter First Number: ").strip())
         num2 = float(input("[+] Enter Second Number: ").strip())
@@ -70,13 +70,11 @@ while True:  # বারবার চলার জন্য loop
             print("\n[!] Error: Invalid Operation Selection")
             continue
 
-        # History তে যোগ করুন
         if result is not None:
             history.append(f"{num1} {operation_symbol} {num2} = {result}")
 
-        # আরও করবেন?
         again = input("\n[?] Do you want to continue? (yes/no): ").strip().lower()
-        if again in ["no", "n", "না"]:
+        if again in ["no", "n"]:
             print("\n" + "=" * 50)
             print("[+] CALCULATION HISTORY:")
             print("=" * 50)

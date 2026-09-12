@@ -81,7 +81,7 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
     logger.info("Worker %d stopping", worker_id)
 
 
-async def stats_reporter(stats: Dict[str, Any], interval: float, stop_event: asyncio.Event):
+async def stats_reporter(queue: asyncio.Queue, stats: Dict[str, Any], interval: float, stop_event: asyncio.Event):
     last = time.time()
     prev_recv = prev_proc = prev_dropped = prev_bytes = prev_sent = 0
     while not stop_event.is_set():
@@ -103,8 +103,8 @@ async def stats_reporter(stats: Dict[str, Any], interval: float, stop_event: asy
         bs = (bytes_sent - prev_sent) / elapsed
 
         logger.info(
-            "stats: recv/s=%.1f proc/s=%.1f dropped/s=%.1f errors=%d in/s=%.1fKB/s out/s=%.1fKB/s queue=%d",
-            rr, pr, dr, errors, br / 1024, bs / 1024, stats.get("queue_size", 0),
+            "stats: recv/s=%.1f proc/s=%.1f dropped/s=%.1f errors=%d in/s=%.1fKB/s out/s=%.1fKB/s queue_current=%d",
+            rr, pr, dr, errors, br / 1024, bs / 1024, queue.qsize(),
         )
 
         prev_recv = recv
@@ -160,7 +160,6 @@ async def main():
         "bytes_recv": 0,
         "bytes_sent": 0,
         "log_drops": False,
-        "queue_size": args.queue,
     }
 
     queue = asyncio.Queue(maxsize=args.queue)
@@ -172,7 +171,7 @@ async def main():
 
     # Start workers
     workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event)) for i in range(args.workers)]
-    stats_task = asyncio.create_task(stats_reporter(stats, args.stats_interval, stop_event))
+    stats_task = asyncio.create_task(stats_reporter(queue, stats, args.stats_interval, stop_event))
 
     # Signal handlers
     def _on_signal():

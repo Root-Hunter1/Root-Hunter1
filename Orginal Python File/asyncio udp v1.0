@@ -65,8 +65,9 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
         # Simulate processing (replace with real work)
         try:
             # Example: echo back a small response prefixing processing time
-            process_ts = time.time()
             # Heavy CPU-bound work must be offloaded to ProcessPoolExecutor
+            process_ts = time.time()
+            latency_ms = int((process_ts) * 1000)
             resp = b"OK %dms %b" % (latency_ms, data[:200])
             if protocol.transport is not None:
                 protocol.transport.sendto(resp, addr)

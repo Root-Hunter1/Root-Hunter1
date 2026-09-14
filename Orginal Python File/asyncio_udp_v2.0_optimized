@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """
-High-performance asyncio UDP server v2.0 - OPTIMIZED FOR THROUGHPUT
+High-performance asyncio UDP server.
 
-Performance Enhancements:
-- Lock-free stats using atomic operations
-- Batch processing to reduce function call overhead
-- Memory pool for reusable buffers
-- NUMA-aware worker distribution
-- Direct socket sendto() bypassing protocol layer
-- CPU affinity support for worker threads
-- Vectored I/O (sendmmsg) for multi-packet sending
-- JIT compilation ready (PyPy compatible)
-- Zero-copy packet handling where possible
-- Ring buffer alternative to Queue for ultra-low latency
+Features:
+- asyncio DatagramProtocol with a bounded asyncio.Queue for backpressure
+- Worker pool (asyncio tasks) to process datagrams concurrently
+- Option to use SO_REUSEPORT for multi-process scaling
+- Option to use uvloop for better performance
+- Configurable recv buffer, queue size, workers
+- Periodic stats printing and graceful shutdown on SIGINT/SIGTERM
 """
-
 import argparse
 import asyncio
 import logging
@@ -22,463 +17,194 @@ import socket
 import signal
 import sys
 import time
-import struct
-import os
-from typing import Dict, Any, List, Tuple, Optional
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
-import threading
+from typing import Dict, Any
 
-logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S"
-)
-logger = logging.getLogger("udp-server-v2")
-
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 1: Lock-free Stats with Atomic-like behavior
-# ============================================================================
-class AtomicStats:
-    """Thread-safe stats without mutex overhead using local thread storage"""
-    def __init__(self):
-        self._stats = {
-            "recv": 0,
-            "processed": 0,
-            "dropped": 0,
-            "errors": 0,
-            "bytes_recv": 0,
-            "bytes_sent": 0,
-            "queue_overflows": 0,
-        }
-        self._lock = threading.Lock()  # Minimal locking
-    
-    def increment(self, key: str, value: int = 1):
-        self._stats[key] += value
-    
-    def get_snapshot(self) -> Dict[str, int]:
-        with self._lock:
-            return self._stats.copy()
-    
-    def get(self, key: str) -> int:
-        return self._stats.get(key, 0)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("udp-server")
 
 
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 2: Ring Buffer (Ultra-low latency alternative)
-# ============================================================================
-class RingBuffer:
-    """Lock-free ring buffer for even faster packet queueing"""
-    def __init__(self, maxsize: int):
-        self.maxsize = maxsize
-        self.buffer = [None] * maxsize
-        self.write_pos = 0
-        self.read_pos = 0
-        self.size = 0
-        self.lock = asyncio.Lock()
-    
-    async def put(self, item):
-        async with self.lock:
-            if self.size >= self.maxsize:
-                raise asyncio.QueueFull()
-            self.buffer[self.write_pos] = item
-            self.write_pos = (self.write_pos + 1) % self.maxsize
-            self.size += 1
-    
-    async def get(self):
-        async with self.lock:
-            if self.size == 0:
-                return None
-            item = self.buffer[self.read_pos]
-            self.read_pos = (self.read_pos + 1) % self.maxsize
-            self.size -= 1
-            return item
-    
-    def qsize(self) -> int:
-        return self.size
-
-
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 3: Memory Pool (Reduce GC pressure)
-# ============================================================================
-class BufferPool:
-    """Pre-allocated buffer pool to reduce garbage collection"""
-    def __init__(self, pool_size: int = 1000, buffer_size: int = 65536):
-        self.available = deque([bytearray(buffer_size) for _ in range(pool_size)])
-        self.in_use = 0
-        self.buffer_size = buffer_size
-        self.lock = threading.Lock()
-    
-    def acquire(self) -> bytearray:
-        with self.lock:
-            if self.available:
-                self.in_use += 1
-                return self.available.popleft()
-            return bytearray(self.buffer_size)
-    
-    def release(self, buf: bytearray):
-        with self.lock:
-            self.in_use -= 1
-            if len(self.available) < 1000:
-                self.available.append(buf)
-
-
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 4: Batch Processing
-# ============================================================================
-class BatchProcessor:
-    """Process multiple packets in batch to reduce context switches"""
-    def __init__(self, batch_size: int = 100):
-        self.batch_size = batch_size
-        self.batch = []
-    
-    def add(self, item):
-        self.batch.append(item)
-        return len(self.batch) >= self.batch_size
-    
-    def get_batch(self) -> List:
-        batch = self.batch[:]
-        self.batch.clear()
-        return batch
-    
-    def flush(self):
-        return self.get_batch() if self.batch else []
-
-
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 5: Enhanced Protocol
-# ============================================================================
-class OptimizedUDPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, queue: asyncio.Queue, stats: AtomicStats, use_batch: bool = True):
+class UDPServerProtocol(asyncio.DatagramProtocol):
+    def __init__(self, queue: asyncio.Queue, stats: Dict[str, Any]):
         self.queue = queue
         self.stats = stats
         self.transport = None
-        self.use_batch = use_batch
-        self.batch_processor = BatchProcessor() if use_batch else None
-        self.batch_flush_time = time.time()
-        
+
     def connection_made(self, transport):
         self.transport = transport
-        sock = transport.get_extra_info('socket')
-        # Optimize socket options
-        try:
-            sock.setsockopt(socket.IPPROTO_UDP, socket.UDP_CORK, 1)
-        except:
-            pass
-        logger.info("UDP transport ready (batch mode: %s)", self.use_batch)
-    
+        logger.info("UDP transport ready")
+
     def datagram_received(self, data: bytes, addr):
-        self.stats.increment("recv")
-        self.stats.increment("bytes_recv", len(data))
-        
+        # Quick, non-blocking work only
+        self.stats["recv"] += 1
+        self.stats["bytes_recv"] += len(data)
         try:
-            # Fast path: non-blocking put
-            self.queue.put_nowait((data, addr, time.perf_counter()))
+            self.queue.put_nowait((data, addr, time.time()))
         except asyncio.QueueFull:
-            self.stats.increment("dropped")
-            self.stats.increment("queue_overflows")
-    
+            # Drop if overwhelmed
+            self.stats["dropped"] += 1
+            # Optionally log at debug level
+            if self.stats.get("log_drops"):
+                logger.warning("Queue full, dropping packet from %s", addr)
+
     def error_received(self, exc):
         logger.error("Socket error: %s", exc)
-        self.stats.increment("errors")
+        self.stats["errors"] += 1
+
+    def connection_lost(self, exc):
+        logger.info("Connection lost: %s", exc)
 
 
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 6: Worker with Adaptive Batching
-# ============================================================================
-async def optimized_worker(
-    worker_id: int,
-    queue: asyncio.Queue,
-    transport: asyncio.Transport,
-    stats: AtomicStats,
-    stop_event: asyncio.Event,
-    batch_size: int = 10,
-    enable_sendmmsg: bool = False
-):
-    """
-    Optimized worker with:
-    - Batch processing
-    - Reduced syscalls
-    - CPU-efficient timeout handling
-    """
-    logger.info("Worker %d started (batch_size=%d)", worker_id, batch_size)
-    batch = []
-    last_flush = time.perf_counter()
-    
+async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event):
+    logger.info("Worker %d started", worker_id)
     while not stop_event.is_set():
         try:
-            # Non-blocking batch collection
-            item = await asyncio.wait_for(queue.get(), timeout=0.01)
-            batch.append(item)
-            
-            # Process batch when it reaches batch_size or on timeout
-            if len(batch) >= batch_size:
-                await _process_batch(batch, transport, stats)
-                batch.clear()
-                last_flush = time.perf_counter()
-            
+            item = await asyncio.wait_for(queue.get(), timeout=1.0)
         except asyncio.TimeoutError:
-            # Flush remaining items
-            if batch and (time.perf_counter() - last_flush) > 0.05:
-                await _process_batch(batch, transport, stats)
-                batch.clear()
-                last_flush = time.perf_counter()
             continue
-        except Exception as e:
-            logger.error("Worker %d error: %s", worker_id, e)
-            stats.increment("errors")
-    
-    # Flush remaining on shutdown
-    if batch:
-        await _process_batch(batch, transport, stats)
-    
-    logger.info("Worker %d stopped", worker_id)
-
-
-async def _process_batch(batch: List, transport: asyncio.Transport, stats: AtomicStats):
-    """Process a batch of packets efficiently"""
-    for data, addr, ts in batch:
+        data, addr, ts = item
+        # Simulate processing (replace with real work)
         try:
-            latency_us = int((time.perf_counter() - ts) * 1_000_000)
-            resp = f"OK {latency_us}us".encode()
-            
-            # Direct sendto for lower latency
-            transport.sendto(resp, addr)
-            
-            stats.increment("processed")
-            stats.increment("bytes_sent", len(resp))
+            # Example: echo back a small response prefixing processing time
+            # Heavy CPU-bound work must be offloaded to ProcessPoolExecutor
+            process_ts = time.time()
+            latency_ms = int((process_ts - ts) * 1000)
+            resp = b"OK %dms %b" % (latency_ms, data[:200])
+            if protocol.transport is not None:
+                protocol.transport.sendto(resp, addr)
+            stats["processed"] += 1
+            stats["bytes_sent"] += len(resp)
         except Exception as e:
-            stats.increment("errors")
-            logger.debug("Error processing packet: %s", e)
+            stats["errors"] += 1
+            logger.exception("Worker %d processing error: %s", worker_id, e)
+        finally:
+            queue.task_done()
+    logger.info("Worker %d stopping", worker_id)
 
 
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 7: Advanced Stats Reporter
-# ============================================================================
-async def advanced_stats_reporter(
-    queue: asyncio.Queue,
-    stats: AtomicStats,
-    interval: float,
-    stop_event: asyncio.Event
-):
-    """Enhanced stats with throughput calculations and bottleneck detection"""
-    last_time = time.perf_counter()
-    last_snapshot = stats.get_snapshot()
-    
+async def stats_reporter(queue: asyncio.Queue, stats: Dict[str, Any], interval: float, stop_event: asyncio.Event):
+    last = time.time()
+    prev_recv = prev_proc = prev_dropped = prev_bytes = prev_sent = 0
     while not stop_event.is_set():
         await asyncio.sleep(interval)
-        
-        now = time.perf_counter()
-        elapsed = now - last_time
-        last_time = now
-        
-        current = stats.get_snapshot()
-        
-        # Calculate rates
-        recv_rate = (current["recv"] - last_snapshot["recv"]) / elapsed
-        proc_rate = (current["processed"] - last_snapshot["processed"]) / elapsed
-        drop_rate = (current["dropped"] - last_snapshot["dropped"]) / elapsed
-        bytes_in = (current["bytes_recv"] - last_snapshot["bytes_recv"]) / elapsed / 1024 / 1024
-        bytes_out = (current["bytes_sent"] - last_snapshot["bytes_sent"]) / elapsed / 1024 / 1024
-        
-        # Detect bottlenecks
-        queue_size = queue.qsize() if hasattr(queue, 'qsize') else 0
-        bottleneck = "QUEUE FULL" if drop_rate > 0 else "HEALTHY"
-        
+        now = time.time()
+        elapsed = now - last
+        last = now
+        recv = stats["recv"]
+        proc = stats["processed"]
+        dropped = stats["dropped"]
+        errors = stats["errors"]
+        bytes_recv = stats["bytes_recv"]
+        bytes_sent = stats["bytes_sent"]
+
+        rr = (recv - prev_recv) / elapsed
+        pr = (proc - prev_proc) / elapsed
+        dr = (dropped - prev_dropped) / elapsed
+        br = (bytes_recv - prev_bytes) / elapsed
+        bs = (bytes_sent - prev_sent) / elapsed
+
         logger.info(
-            "%s | RX: %.1fk/s | TX: %.1fk/s | Dropped: %.1f/s | "
-            "BW-In: %.1f MB/s | BW-Out: %.1f MB/s | Queue: %d | Errors: %d",
-            bottleneck, recv_rate / 1000, proc_rate / 1000, drop_rate,
-            bytes_in, bytes_out, queue_size, current["errors"]
+            "stats: recv/s=%.1f proc/s=%.1f dropped/s=%.1f errors=%d in/s=%.1fKB/s out/s=%.1fKB/s queue_current=%d",
+            rr, pr, dr, errors, br / 1024, bs / 1024, queue.qsize(),
         )
-        
-        last_snapshot = current
+
+        prev_recv = recv
+        prev_proc = proc
+        prev_dropped = dropped
+        prev_bytes = bytes_recv
+        prev_sent = bytes_sent
 
 
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 8: CPU Affinity Support
-# ============================================================================
-def set_cpu_affinity(cpu_id: int):
-    """Bind process to specific CPU core"""
-    try:
-        import psutil
-        p = psutil.Process()
-        p.cpu_affinity([cpu_id])
-        logger.info("Process bound to CPU %d", cpu_id)
-    except ImportError:
-        logger.warning("psutil not available, CPU affinity disabled")
-    except Exception as e:
-        logger.warning("Could not set CPU affinity: %s", e)
-
-
-# ============================================================================
-# PERFORMANCE OPTIMIZATION 9: Enhanced Socket Configuration
-# ============================================================================
-def build_optimized_socket(
-    host: str,
-    port: int,
-    recv_buf: int,
-    send_buf: int,
-    reuse_port: bool,
-    enable_gso: bool = False
-) -> socket.socket:
-    """
-    Build UDP socket with maximum performance tuning
-    
-    GSO (Generic Segmentation Offload) - requires Linux 4.18+
-    GRO (Generic Receive Offload) - requires Linux 4.18+
-    """
+def build_socket(host: str, port: int, recv_buf: int, reuse_port: bool):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    
-    # Reuse options
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if reuse_port and hasattr(socket, "SO_REUSEPORT"):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-    
-    # Buffer sizes
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, recv_buf)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, send_buf)
-    
-    # Non-blocking
-    sock.setblocking(False)
-    
-    # UDP-specific optimizations
+    # Increase socket buffers for higher throughput
     try:
-        # Disable Nagle for UDP (if applicable)
-        sock.setsockopt(socket.IPPROTO_UDP, socket.UDP_CORK, 1)
-    except:
-        pass
-    
-    # Linux-specific optimizations
-    if hasattr(socket, "UDP_SEGMENT") and enable_gso:
-        try:
-            sock.setsockopt(socket.IPPROTO_UDP, socket.UDP_SEGMENT, 1200)
-            logger.info("UDP GSO (Generic Segmentation Offload) enabled")
-        except:
-            pass
-    
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, recv_buf)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, recv_buf)
+    except Exception:
+        logger.warning("Could not set socket buffer sizes")
     sock.bind((host, port))
     return sock
 
 
-# ============================================================================
-# MAIN
-# ============================================================================
 async def main():
-    parser = argparse.ArgumentParser(description="High-performance asyncio UDP server v2.0")
-    parser.add_argument("--host", default="0.0.0.0", help="Bind address")
-    parser.add_argument("--port", type=int, default=9999, help="Bind port")
-    parser.add_argument("--workers", type=int, default=8, help="Number of worker tasks")
-    parser.add_argument("--queue", type=int, default=50000, help="Queue size")
-    parser.add_argument("--recv-buf", type=int, default=16 * 1024 * 1024, help="RX buffer")
-    parser.add_argument("--send-buf", type=int, default=16 * 1024 * 1024, help="TX buffer")
-    parser.add_argument("--batch-size", type=int, default=10, help="Worker batch size")
-    parser.add_argument("--stats-interval", type=float, default=2.0, help="Stats interval")
-    parser.add_argument("--reuse-port", action="store_true", help="SO_REUSEPORT")
-    parser.add_argument("--uvloop", action="store_true", help="Use uvloop")
-    parser.add_argument("--cpu-affinity", type=int, help="Bind to CPU core")
-    parser.add_argument("--enable-gso", action="store_true", help="Enable UDP GSO")
-    
+    parser = argparse.ArgumentParser(description="High-performance asyncio UDP server")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=9999)
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--queue", type=int, default=10000)
+    parser.add_argument("--recv-buf", type=int, default=4 * 1024 * 1024)
+    parser.add_argument("--stats-interval", type=float, default=5.0)
+    parser.add_argument("--reuse-port", action="store_true", help="Use SO_REUSEPORT (Linux/macOS)")
+    parser.add_argument("--uvloop", action="store_true", help="Use uvloop if available")
     args = parser.parse_args()
-    
-    # CPU affinity
-    if args.cpu_affinity is not None:
-        set_cpu_affinity(args.cpu_affinity)
-    
-    # Event loop optimization
+
     if args.uvloop:
         try:
             import uvloop
+
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            logger.info("uvloop enabled (2-4x faster than default)")
-        except ImportError:
-            logger.warning("uvloop not available")
-    
+            logger.info("uvloop enabled")
+        except Exception:
+            logger.warning("uvloop not available, continuing with default loop")
+
     loop = asyncio.get_running_loop()
-    
-    # Use AtomicStats for lock-free performance
-    stats = AtomicStats()
-    
-    # Create queue
+
+    stats = {
+        "recv": 0,
+        "processed": 0,
+        "dropped": 0,
+        "errors": 0,
+        "bytes_recv": 0,
+        "bytes_sent": 0,
+        "log_drops": False,
+    }
+
     queue = asyncio.Queue(maxsize=args.queue)
     stop_event = asyncio.Event()
-    
-    # Build optimized socket
-    sock = build_optimized_socket(
-        args.host, args.port, args.recv_buf, args.send_buf,
-        args.reuse_port, args.enable_gso
-    )
-    
-    # Create protocol
-    protocol = OptimizedUDPProtocol(queue, stats, use_batch=True)
-    transport, _ = await loop.create_datagram_endpoint(
-        lambda: protocol, sock=sock
-    )
-    
-    # Start workers with batch processing
-    workers = [
-        asyncio.create_task(
-            optimized_worker(i, queue, transport, stats, stop_event, args.batch_size)
-        )
-        for i in range(args.workers)
-    ]
-    
-    # Stats reporter
-    stats_task = asyncio.create_task(
-        advanced_stats_reporter(queue, stats, args.stats_interval, stop_event)
-    )
-    
+
+    sock = build_socket(args.host, args.port, args.recv_buf, args.reuse_port)
+    protocol = UDPServerProtocol(queue, stats)
+    transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
+
+    # Start workers
+    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event)) for i in range(args.workers)]
+    stats_task = asyncio.create_task(stats_reporter(queue, stats, args.stats_interval, stop_event))
+
     # Signal handlers
     def _on_signal():
         logger.info("Shutdown signal received")
         stop_event.set()
-    
+
     try:
         loop.add_signal_handler(signal.SIGINT, _on_signal)
         loop.add_signal_handler(signal.SIGTERM, _on_signal)
     except NotImplementedError:
-        logger.warning("Signal handlers not supported on this platform")
-    
-    logger.info(
-        "High-performance UDP server v2.0 listening on %s:%d\n"
-        "   Workers: %d | Queue: %d | Batch: %d | Buffers: RX=%dMB TX=%dMB\n"
-        "   Event loop: %s | uvloop: %s",
-        args.host, args.port, args.workers, args.queue, args.batch_size,
-        args.recv_buf // (1024*1024), args.send_buf // (1024*1024),
-        type(loop).__name__, args.uvloop
-    )
-    
-    # Wait for shutdown
+        # Windows: signal handlers for asyncio may not be supported the same way
+        logger.warning("Signal handlers not fully supported on this platform")
+
+    logger.info("UDP server listening on %s:%d (workers=%d, queue=%d, reuse_port=%s)",
+                args.host, args.port, args.workers, args.queue, args.reuse_port)
+
+    # Wait until stop_event is set
     await stop_event.wait()
-    
-    logger.info("Waiting for queue to drain...")
+    logger.info("Waiting for queue to drain (timeout 5s)...")
     try:
         await asyncio.wait_for(queue.join(), timeout=5.0)
     except asyncio.TimeoutError:
         logger.warning("Timeout waiting for queue to drain")
-    
-    # Cleanup
+
+    # Cancel workers
     for w in workers:
         w.cancel()
     await asyncio.gather(*workers, return_exceptions=True)
-    
+
     stats_task.cancel()
     await asyncio.gather(stats_task, return_exceptions=True)
-    
+
     transport.close()
-    
-    final_stats = stats.get_snapshot()
-    logger.info(
-        "Final Stats:\n"
-        "   Received: %d packets (%d bytes)\n"
-        "   Processed: %d packets (%d bytes)\n"
-        "   Dropped: %d packets\n"
-        "   Errors: %d",
-        final_stats["recv"], final_stats["bytes_recv"],
-        final_stats["processed"], final_stats["bytes_sent"],
-        final_stats["dropped"], final_stats["errors"]
-    )
-    
     logger.info("Server shutdown complete")
 
 
@@ -486,4 +212,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        logger.info("Interrupted, exiting")

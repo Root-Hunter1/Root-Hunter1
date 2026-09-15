@@ -9,6 +9,8 @@ Features:
 - Option to use uvloop for better performance
 - Configurable recv buffer, queue size, workers
 - Periodic stats printing and graceful shutdown on SIGINT/SIGTERM
+- __slots__ for memory optimization
+- memoryview for zero-copy data handling
 """
 import argparse
 import asyncio
@@ -24,6 +26,8 @@ logger = logging.getLogger("udp-server")
 
 
 class UDPServerProtocol(asyncio.DatagramProtocol):
+    __slots__ = ('queue', 'stats', 'transport')
+    
     def __init__(self, queue: asyncio.Queue, stats: Dict[str, Any]):
         self.queue = queue
         self.stats = stats
@@ -38,7 +42,10 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
         self.stats["recv"] += 1
         self.stats["bytes_recv"] += len(data)
         try:
-            self.queue.put_nowait((data, addr, time.time()))
+            # Use memoryview for zero-copy slicing
+            # This avoids copying large data into the queue
+            data_view = memoryview(data)
+            self.queue.put_nowait((data_view, addr, time.time()))
         except asyncio.QueueFull:
             # Drop if overwhelmed
             self.stats["dropped"] += 1
@@ -61,14 +68,22 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
             item = await asyncio.wait_for(queue.get(), timeout=1.0)
         except asyncio.TimeoutError:
             continue
-        data, addr, ts = item
+        data_view, addr, ts = item
         # Simulate processing (replace with real work)
         try:
             # Example: echo back a small response prefixing processing time
             # Heavy CPU-bound work must be offloaded to ProcessPoolExecutor
             process_ts = time.time()
             latency_ms = int((process_ts - ts) * 1000)
-            resp = b"OK %dms %b" % (latency_ms, data[:200])
+            
+            # Convert memoryview to bytes only when needed
+            # Slice up to 200 bytes using memoryview (zero-copy)
+            if len(data_view) > 200:
+                data_slice = bytes(data_view[:200])
+            else:
+                data_slice = bytes(data_view)
+            
+            resp = b"OK %dms %b" % (latency_ms, data_slice)
             if protocol.transport is not None:
                 protocol.transport.sendto(resp, addr)
             stats["processed"] += 1

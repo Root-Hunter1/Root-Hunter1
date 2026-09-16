@@ -24,6 +24,9 @@ logger = logging.getLogger("udp-server")
 
 
 class UDPServerProtocol(asyncio.DatagramProtocol):
+
+     __slots__ = ("queue", "stats", "logs_drops", "transport")
+
     def __init__(self, queue: asyncio.Queue, stats: Dict[str, Any]):
         self.queue = queue
         self.stats = stats
@@ -38,7 +41,7 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
         self.stats["recv"] += 1
         self.stats["bytes_recv"] += len(data)
         try:
-            self.queue.put_nowait((data, addr, time.time()))
+            self.queue.put_nowait((memoryview(data), addr, time.time()))
         except asyncio.QueueFull:
             # Drop if overwhelmed
             self.stats["dropped"] += 1

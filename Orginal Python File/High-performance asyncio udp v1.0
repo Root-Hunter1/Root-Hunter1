@@ -23,7 +23,6 @@ from concurrent.futures import ThreadPoolExecutor
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("udp-server")
 
-
 class UDPServerProtocol(asyncio.DatagramProtocol):
 
      __slots__ = ("queue", "stats", "logs_drops", "transport")
@@ -217,7 +216,6 @@ async def main():
     transport.close()
     executor.shutdown(wait=True) 
     logger.info("Server shutdown complete")
-
 
 if __name__ == "__main__":
     try:

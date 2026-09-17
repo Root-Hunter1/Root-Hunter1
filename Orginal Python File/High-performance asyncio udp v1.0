@@ -18,6 +18,7 @@ import signal
 import sys
 import time
 from typing import Dict, Any
+from concurrent.futures import ThreadPoolExecutor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("udp-server")
@@ -56,11 +57,15 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
     def connection_lost(self, exc):
         logger.info("Connection lost: %s", exc)
 
+def heavvy_cpu_or_blocking_task(data: bytes) -> bytes:
+    return data[::-1]
 
-async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event):
+async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor):
+    loop = asyncio.get_running_loop()
     logger.info("Worker %d started", worker_id)
     while not stop_event.is_set():
         try:
+            processed_data = await loop.run_in_executor(executor, heavvy_cpu_or_blocking_task, bytes(data))
             item = await asyncio.wait_for(queue.get(), timeout=1.0)
         except asyncio.TimeoutError:
             continue
@@ -168,6 +173,8 @@ async def main():
     queue = asyncio.Queue(maxsize=args.queue)
     stop_event = asyncio.Event()
 
+    executor = ThreadPoolExecutor(max_workers=7)
+
     sock = build_socket(args.host, args.port, args.recv_buf, args.reuse_port)
     protocol = UDPServerProtocol(queue, stats)
     transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
@@ -208,6 +215,7 @@ async def main():
     await asyncio.gather(stats_task, return_exceptions=True)
 
     transport.close()
+    executor.shutdown(wait=True) 
     logger.info("Server shutdown complete")
 
 

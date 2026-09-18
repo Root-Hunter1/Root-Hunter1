@@ -18,5 +18,3 @@ Clone the repository:
 
 ```bash
 git clone https://github.com/Root-Hunter1/Root-Hunter1
-cd Root-Hunter1
-

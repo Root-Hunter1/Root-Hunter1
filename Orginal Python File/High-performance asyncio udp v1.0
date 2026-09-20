@@ -25,7 +25,7 @@ logger = logging.getLogger("udp-server")
 
 class UDPServerProtocol(asyncio.DatagramProtocol):
 
-     __slots__ = ("queue", "stats", "logs_drops", "transport")
+    __slots__ = ("queue", "stats", "logs_drops", "transport")
 
     def __init__(self, queue: asyncio.Queue, stats: Dict[str, Any]):
         self.queue = queue

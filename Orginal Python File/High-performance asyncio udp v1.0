@@ -59,7 +59,7 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
 def heavvy_cpu_or_blocking_task(data: bytes) -> bytes:
     return data[::-1]
 
-async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor):
+async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor, sem: asyncio.Semaphore):
     loop = asyncio.get_running_loop()
     logger.info("Worker %d started", worker_id)
     while not stop_event.is_set():
@@ -71,6 +71,9 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
         data, addr, ts = item
         # Simulate processing (replace with real work)
         try:
+            async with sem:
+                processed_data = await loop.run_in_executor(executor, task, bytes(data))
+
             # Example: echo back a small response prefixing processing time
             # Heavy CPU-bound work must be offloaded to ProcessPoolExecutor
             process_ts = time.time()
@@ -146,6 +149,7 @@ async def main():
     parser.add_argument("--stats-interval", type=float, default=5.0)
     parser.add_argument("--reuse-port", action="store_true", help="Use SO_REUSEPORT (Linux/macOS)")
     parser.add_argument("--uvloop", action="store_true", help="Use uvloop if available")
+    parser.add_argument("--concurrency", type=int, default=7, help="Max concurrent tasks")
     args = parser.parse_args()
 
     if args.uvloop:
@@ -179,7 +183,7 @@ async def main():
     transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
 
     # Start workers
-    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event)) for i in range(args.workers)]
+    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event, executor, sem)) for i in range(args.workers)]
     stats_task = asyncio.create_task(stats_reporter(queue, stats, args.stats_interval, stop_event))
 
     # Signal handlers

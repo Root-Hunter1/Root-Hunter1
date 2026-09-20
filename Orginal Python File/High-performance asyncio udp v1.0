@@ -64,7 +64,6 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
     logger.info("Worker %d started", worker_id)
     while not stop_event.is_set():
         try:
-            processed_data = await loop.run_in_executor(executor, cpu_task, bytes(data))
             item = await asyncio.wait_for(queue.get(), timeout=1.0)
         except asyncio.TimeoutError:
             continue

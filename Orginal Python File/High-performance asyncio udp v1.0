@@ -177,7 +177,8 @@ async def main():
     stop_event = asyncio.Event()
 
     executor = ThreadPoolExecutor(max_workers=7)
-
+    sem = asyncio.Semaphore((args.concurrency))
+  
     sock = build_socket(args.host, args.port, args.recv_buf, args.reuse_port)
     protocol = UDPServerProtocol(queue, stats)
     transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)

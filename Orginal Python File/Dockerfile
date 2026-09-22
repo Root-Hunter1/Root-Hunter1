@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+yFROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -13,5 +13,4 @@ COPY database.py ./database.py
 
 EXPOSE 9999/udp
 
-CMD ["python", "7.py", "--host", "0.0.0.0", "--port", "9999"]
-                                                                       ENV PYTHONDONT                                                     
+CMD ["python", "7.py", "--host", "0.0.0.0", "--port", "9999"]                                                 

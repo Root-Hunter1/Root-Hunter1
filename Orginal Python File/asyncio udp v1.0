@@ -85,6 +85,7 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
                 protocol.transport.sendto(resp, addr)
             stats["processed"] += 1
             stats["bytes_sent"] += len(resp)
+            
             await db.save_packet(
                 raw_data=bytes(data),
                 processed_data=processed_data,
@@ -92,7 +93,7 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
                 received_at=ts,
                 latency_ms=latency_ms            
             )
-         except Exception as e:
+        except Exception as e:
             stats["errors"] += 1
             logger.exception("Worker %d processing error: %s", worker_id, e)
         finally:
@@ -159,7 +160,7 @@ async def main():
     parser.add_argument("--reuse-port", action="store_true", help="Use SO_REUSEPORT (Linux/macOS)")
     parser.add_argument("--uvloop", action="store_true", help="Use uvloop if available")
     parser.add_argument("--concurrency", type=int, default=7, help="Max concurrent tasks")
-    args = parser.parse_args()
+    args = parser.parse_args() to Amar 
 
     if args.uvloop:
         try:

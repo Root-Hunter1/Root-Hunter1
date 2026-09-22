@@ -226,7 +226,7 @@ async def main():
 
     transport.close()
     executor.shutdown(wait=True) 
-    await db.close()
+    await database.close()
     logger.info("Server shutdown complete")
 
 if __name__ == "__main__":

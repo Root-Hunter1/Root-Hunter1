@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
 High-performance asyncio UDP server.
-
-
+Features:
+- asyncio DatagramProtocol with a bounded asyncio.Queue for backpressure
+- Worker pool (asyncio tasks) to process datagrams concurrently
+- Option to use SO_REUSEPORT for multi-process scaling
+- concurrent.futures Threading Executor worker main
+- Option to use uvloop for better performance
+- concurrency control Semaphore used
+- Configurable recv buffer, queue size, workers
+- Periodic stats printing and graceful shutdown on SIGINT/SIGTERM
+- Postsql Database Management 
+"""
 import argparse
 import asyncio
 import logging

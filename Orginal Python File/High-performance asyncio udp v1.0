@@ -191,7 +191,7 @@ async def main():
     queue = asyncio.Queue(maxsize=args.queue)
     stop_event = asyncio.Event()
 
-    executor = ThreadPoolExecutor(max_workers=7)
+    executor = ThreadPoolExecutor(max_workers=4)
     sem = asyncio.Semaphore((args.concurrency))
   
     sock = build_socket(args.host, args.port, args.recv_buf, args.reuse_port)
@@ -199,7 +199,7 @@ async def main():
     transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
 
     # Start workers
-    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event, executor, sem)) for i in range(args.workers)]
+    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event, executor, sem, db)) for i in range(args.workers)]
     stats_task = asyncio.create_task(stats_reporter(queue, stats, args.stats_interval, stop_event))
 
     # Signal handlers
@@ -235,6 +235,7 @@ async def main():
 
     transport.close()
     executor.shutdown(wait=True) 
+    await db.close()
     logger.info("Server shutdown complete")
 
 if __name__ == "__main__":

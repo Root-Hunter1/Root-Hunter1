@@ -1,0 +1,2 @@
+psycopg[binary,pool]>=3.2,<4
+uvloop>=0.19; platform_system != "Windows"

@@ -19,6 +19,7 @@ import sys
 import time
 from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor
+from database import Database
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("udp-server")
@@ -59,7 +60,7 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
 def cpu_task(data: bytes) -> bytes:
     return data[::-1]
 
-async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor, sem: asyncio.Semaphore):
+async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor, sem: asyncio.Semaphore, db: Database):
     loop = asyncio.get_running_loop()
     logger.info("Worker %d started", worker_id)
     while not stop_event.is_set():
@@ -82,7 +83,14 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
                 protocol.transport.sendto(resp, addr)
             stats["processed"] += 1
             stats["bytes_sent"] += len(resp)
-        except Exception as e:
+            await db.save_packet(
+                raw_data=bytes(data),
+                processed_data=processed_data,
+                address=addr,
+                received_at=ts,
+                latency_ms=latency_ms                                                               )
+            )
+         except Exception as e:
             stats["errors"] += 1
             logger.exception("Worker %d processing error: %s", worker_id, e)
         finally:
@@ -171,7 +179,15 @@ async def main():
         "bytes_sent": 0,
         "logs_drops": False,
     }
-
+   
+    db = Database()
+    try:
+        logger.info("Connecting to PostgreSQL database...")
+        await db.connect()
+    except Exception as e:
+        logger.error("Failed to connect to database: %s", e)                                     
+        returning
+  
     queue = asyncio.Queue(maxsize=args.queue)
     stop_event = asyncio.Event()
 

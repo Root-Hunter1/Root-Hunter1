@@ -2,14 +2,7 @@
 """
 High-performance asyncio UDP server.
 
-Features:
-- asyncio DatagramProtocol with a bounded asyncio.Queue for backpressure
-- Worker pool (asyncio tasks) to process datagrams concurrently
-- Option to use SO_REUSEPORT for multi-process scaling
-- Option to use uvloop for better performance
-- Configurable recv buffer, queue size, workers
-- Periodic stats printing and graceful shutdown on SIGINT/SIGTERM
-"""
+
 import argparse
 import asyncio
 import logging

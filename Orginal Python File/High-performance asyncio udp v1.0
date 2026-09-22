@@ -46,7 +46,7 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
             # Drop if overwhelmed
             self.stats["dropped"] += 1
             # Optionally log at debug level
-            if self.stats.get("log_drops"):
+            if self.stats.get("logs_drops"):
                 logger.warning("Queue full, dropping packet from %s", addr)
 
     def error_received(self, exc):
@@ -169,7 +169,7 @@ async def main():
         "errors": 0,
         "bytes_recv": 0,
         "bytes_sent": 0,
-        "log_drops": False,
+        "logs_drops": False,
     }
 
     queue = asyncio.Queue(maxsize=args.queue)

@@ -1,4 +1,4 @@
-"""Async PostgreSQL integration for the UDP server.
+"""Async PostgreSQL integration for the UDP server..
 
 The pool is shared by all UDP workers so database writes do not create a new
 connection for every packet. Configure it with DATABASE_URL, for example:

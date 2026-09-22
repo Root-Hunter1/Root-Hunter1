@@ -62,7 +62,7 @@ class UDPServerProtocol(asyncio.DatagramProtocol):
 def cpu_task(data: bytes) -> bytes:
     return data[::-1]
 
-async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor, sem: asyncio.Semaphore, db: Database):
+async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerProtocol, stats: Dict[str, Any], stop_event: asyncio.Event, executor: ThreadPoolExecutor, sem: asyncio.Semaphore, database):
     loop = asyncio.get_running_loop()
     logger.info("Worker %d started", worker_id)
     while not stop_event.is_set():
@@ -85,14 +85,6 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
                 protocol.transport.sendto(resp, addr)
             stats["processed"] += 1
             stats["bytes_sent"] += len(resp)
-            
-            await db.save_packet(
-                raw_data=bytes(data),
-                processed_data=processed_data,
-                address=addr,
-                received_at=ts,
-                latency_ms=latency_ms            
-            )
         except Exception as e:
             stats["errors"] += 1
             logger.exception("Worker %d processing error: %s", worker_id, e)
@@ -160,6 +152,7 @@ async def main():
     parser.add_argument("--reuse-port", action="store_true", help="Use SO_REUSEPORT (Linux/macOS)")
     parser.add_argument("--uvloop", action="store_true", help="Use uvloop if available")
     parser.add_argument("--concurrency", type=int, default=7, help="Max concurrent tasks")
+    parser.add_argument('--db-url', type=str, help='Database connection URL')
     args = parser.parse_args()
 
     if args.uvloop:
@@ -181,28 +174,23 @@ async def main():
         "bytes_recv": 0,
         "bytes_sent": 0,
         "logs_drops": False,
-    }
-   
-    db = Database()
-    try:
-        logger.info("Connecting to PostgreSQL database...")
-        await db.connect()
-    except Exception as e:
-        logger.error("Failed to connect to database: %s", e)                                     
-        returning
-  
+    }          
     queue = asyncio.Queue(maxsize=args.queue)
     stop_event = asyncio.Event()
 
     executor = ThreadPoolExecutor(max_workers=4)
+    
     sem = asyncio.Semaphore((args.concurrency))
-  
+    database = Database(args.db_url, max_size=max(args.workers, args.concurrency))
+    await database.connect()                                              
+    logger.info("PostgreSQL connected")
+    
     sock = build_socket(args.host, args.port, args.recv_buf, args.reuse_port)
     protocol = UDPServerProtocol(queue, stats)
     transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
 
     # Start workers
-    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event, executor, sem, db)) for i in range(args.workers)]
+    workers = [asyncio.create_task(worker_main(i, queue, protocol, stats, stop_event, executor, sem, database)) for i in range(args.workers)]
     stats_task = asyncio.create_task(stats_reporter(queue, stats, args.stats_interval, stop_event))
 
     # Signal handlers

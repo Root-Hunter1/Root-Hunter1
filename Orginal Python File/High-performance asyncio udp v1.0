@@ -10,7 +10,7 @@ Features:
 - concurrency control Semaphore used
 - Configurable recv buffer, queue size, workers
 - Periodic stats printing and graceful shutdown on SIGINT/SIGTERM
-- Postsql Database Management 
+- postgresql Database Management 
 """
 import argparse
 import asyncio

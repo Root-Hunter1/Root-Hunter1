@@ -90,7 +90,7 @@ async def worker_main(worker_id: int, queue: asyncio.Queue, protocol: UDPServerP
                 processed_data=processed_data,
                 address=addr,
                 received_at=ts,
-                latency_ms=latency_ms                                                               )
+                latency_ms=latency_ms            
             )
          except Exception as e:
             stats["errors"] += 1

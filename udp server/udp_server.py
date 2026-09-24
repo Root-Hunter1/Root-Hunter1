@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""UDP ingress that publishes durably before acknowledging the client."""
+"""UDP ingress that publishes durably before acknowledging the client.."""
 from __future__ import annotations
 
 import argparse

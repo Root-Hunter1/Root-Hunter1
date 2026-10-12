@@ -134,7 +134,7 @@ async def serve(args):
     loop = asyncio.get_running_loop()
     stats = Stats()
     queue = asyncio.Queue(maxsize=args.queue)
-    db_queue = asyncio.Queue(maxsize=1000)
+    db_queue = asyncio.Queue(maxsize=20000)
     stop = asyncio.Event()
 
     database = Database(args.db_url, max_size=4)

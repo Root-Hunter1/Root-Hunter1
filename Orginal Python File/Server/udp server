@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+import argparse
+import asyncio
+import logging
+import signal
+import socket
+import time
+
+from database import Database
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("udp-server")
+
+BATCH_SIZE = 200          # একসাথে কতগুলো রেকর্ড DB তে লিখবে
+BATCH_TIMEOUT = 0.05      # সর্বোচ্চ ৫০ms অপেক্ষা, তারপর যা আছে লিখে দাও
+
+
+class Stats:
+    __slots__ = ("recv", "processed", "dropped", "errors", "bytes_recv", "bytes_sent")
+
+    def __init__(self):
+        self.recv = self.processed = self.dropped = 0
+        self.errors = self.bytes_recv = self.bytes_sent = 0
+
+
+class UDPProtocol(asyncio.DatagramProtocol):
+    __slots__ = ("queue", "stats", "transport")
+
+    def __init__(self, queue, stats):
+        self.queue = queue
+        self.stats = stats
+        self.transport = None
+
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        s = self.stats
+        s.recv += 1
+        s.bytes_recv += len(data)
+        try:
+            self.queue.put_nowait((data, addr, time.monotonic()))
+        except asyncio.QueueFull:
+            s.dropped += 1
+
+    def error_received(self, exc):
+        self.stats.errors += 1
+
+
+def process(data: bytes) -> bytes:
+    # এখানে আপনার আসল লজিক বসান (পার্স, ভ্যালিডেট ইত্যাদি)
+    return data[::-1]
+
+
+async def worker(wid, queue, protocol, stats, db_queue):
+    while True:
+        try:
+            data, addr, ts = await queue.get()
+        except asyncio.CancelledError:
+            break
+        try:
+            result = process(data)
+
+            # DB রাইটারের কাছে পাঠাও (অপেক্ষা না করে)
+            try:
+                db_queue.put_nowait((addr[0], addr[1], result))
+            except asyncio.QueueFull:
+                stats.dropped += 1
+
+            resp = b"OK " + result[:200]
+            protocol.transport.sendto(resp, addr)
+            stats.processed += 1
+            stats.bytes_sent += len(resp)
+        except Exception:
+            stats.errors += 1
+            log.exception("worker %d error", wid)
+        finally:
+            queue.task_done()
+
+
+async def db_writer(db_queue, database):
+    """ব্যাচ করে DB তে লেখে: ২০০টা জমলে অথবা ৫০ms পরে।"""
+    while True:
+        try:
+            batch = [await db_queue.get()]
+        except asyncio.CancelledError:
+            return
+
+        deadline = time.monotonic() + BATCH_TIMEOUT
+        while len(batch) < BATCH_SIZE:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                batch.append(await asyncio.wait_for(db_queue.get(), remaining))
+            except asyncio.TimeoutError:
+                break
+            except asyncio.CancelledError:
+                break
+
+        try:
+            # আপনার Database ক্লাসে এমন একটা মেথড লাগবে (নিচে দেখুন)
+            await database.insert_many(batch)
+        except Exception:
+            log.exception("db batch write failed (%d rows)", len(batch))
+
+
+async def stats_reporter(queue, stats, interval):
+    prev_recv = prev_proc = 0
+    while True:
+        await asyncio.sleep(interval)
+        rr = (stats.recv - prev_recv) / interval
+        pr = (stats.processed - prev_proc) / interval
+        prev_recv, prev_proc = stats.recv, stats.processed
+        log.info("recv/s=%.0f proc/s=%.0f dropped=%d errors=%d queue=%d",
+                 rr, pr, stats.dropped, stats.errors, queue.qsize())
+
+
+def build_socket(host, port, buf):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buf)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buf)
+    sock.setblocking(False)
+    sock.bind((host, port))
+    return sock
+
+
+async def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=9999)
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--queue", type=int, default=10000)
+    p.add_argument("--recv-buf", type=int, default=4 * 1024 * 1024)
+    p.add_argument("--db-url", type=str)
+    args = p.parse_args()
+
+    loop = asyncio.get_running_loop()
+    stats = Stats()
+    queue = asyncio.Queue(maxsize=args.queue)
+    db_queue = asyncio.Queue(maxsize=args.queue)
+    stop = asyncio.Event()
+
+    database = Database(args.db_url, max_size=4)
+    await database.connect()
+
+    sock = build_socket(args.host, args.port, args.recv_buf)
+    protocol = UDPProtocol(queue, stats)
+    transport, _ = await loop.create_datagram_endpoint(lambda: protocol, sock=sock)
+
+    workers = [asyncio.create_task(worker(i, queue, protocol, stats, db_queue))
+               for i in range(args.workers)]
+    writer = asyncio.create_task(db_writer(db_queue, database))
+    reporter = asyncio.create_task(stats_reporter(queue, stats, 5.0))
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+
+    log.info("listening on %s:%d", args.host, args.port)
+    await stop.wait()
+
+    # শাটডাউন: আগে কিউ খালি করো, তারপর বন্ধ
+    transport.close()
+    await asyncio.wait_for(queue.join(), timeout=5)
+    await asyncio.wait_for(db_queue.join(), timeout=5)
+
+    for t in (*workers, writer, reporter):
+        t.cancel()
+    await asyncio.gather(*workers, writer, reporter, return_exceptions=True)
+    await database.close()
+    log.info("shutdown complete")
+
+
+if __name__ == "__main__":
+    try:
+        import uvloop
+        uvloop.run(main())
+    except ImportError:
+        asyncio.run(main())

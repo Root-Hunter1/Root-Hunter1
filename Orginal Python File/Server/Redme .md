@@ -32,6 +32,13 @@ If any further errors occur
 'role does not exist' or 'connection refused': The PostgreSQL server is down. Start it:
   pg_ctl -D $PREFIX/var/lib/postgresql start
 
+যাচাই করুন ডেটা DB তে ঢুকেছে কিনা:
+psql mydb -c "SELECT count(*) FROM packets;"
+
+সঠিকভাবে হারানো ডেটা যাচাই করুন:
+psql mydb -c "TRUNCATE packets;"
+
+psql mydb -c "SELECT count(*) FROM packets;"
 
 database.py spped test: 
 class Database:

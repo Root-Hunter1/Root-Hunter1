@@ -51,14 +51,12 @@ class UDPProtocol(asyncio.DatagramProtocol):
 
 
 def process(data: bytes):
-    # আপনার আসল লজিক এখানে (পার্স + ভ্যালিডেট)
     return data
 
 
 async def worker(queue, protocol, stats, db_queue, send_reply):
     while True:
         try:
-            # একটা আইটেমের জন্য অপেক্ষা, তারপর যা জমেছে সব একসাথে নাও
             batch = [await queue.get()]
             while not queue.empty() and len(batch) < BATCH_SIZE:
                 batch.append(queue.get_nowait())
@@ -94,7 +92,6 @@ async def db_writer(db_queue, database):
         except asyncio.CancelledError:
             return
 
-        # আরও জমা থাকলে একসাথে মিলিয়ে নাও
         while not db_queue.empty() and len(rows) < BATCH_SIZE * 4:
             rows.extend(db_queue.get_nowait())
             db_queue.task_done()
@@ -121,7 +118,7 @@ async def stats_reporter(queue, stats, interval, pid):
 def build_socket(host, port, buf):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)   # মাল্টি-প্রসেসের জন্য জরুরি
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)  
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buf)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buf)
     sock.setblocking(False)
@@ -179,11 +176,11 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=9999)
-    p.add_argument("--procs", type=int, default=mp.cpu_count(), help="প্রসেস সংখ্যা")
-    p.add_argument("--workers", type=int, default=2, help="প্রতি প্রসেসে ওয়ার্কার")
+    p.add_argument("--procs", type=int, default=mp.cpu_count())
+    p.add_argument("--workers", type=int, default=2)
     p.add_argument("--queue", type=int, default=50000)
     p.add_argument("--recv-buf", type=int, default=8 * 1024 * 1024)
-    p.add_argument("--reply", action="store_true", help="প্রতি প্যাকেটে OK রিপ্লাই পাঠাও")
+    p.add_argument("--reply", action="store_true")
     p.add_argument("--db-url", type=str)
     args = p.parse_args()
 

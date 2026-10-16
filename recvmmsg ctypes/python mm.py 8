@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+import ctypes, socket, time, os
+import multiprocessing as mp
+from ctypes import c_void_p, c_size_t, c_uint32, c_int, c_uint, POINTER
+
+# --- C স্ট্রাকচার ---
+class iovec(ctypes.Structure):
+    _fields_ = [("iov_base", c_void_p), ("iov_len", c_size_t)]
+
+class msghdr(ctypes.Structure):
+    _fields_ = [("msg_name", c_void_p), ("msg_namelen", c_uint32),
+                ("msg_iov", POINTER(iovec)), ("msg_iovlen", c_size_t),
+                ("msg_control", c_void_p), ("msg_controllen", c_size_t),
+                ("msg_flags", c_int)]
+
+class mmsghdr(ctypes.Structure):
+    _fields_ = [("msg_hdr", msghdr), ("msg_len", c_uint)]
+
+libc = ctypes.CDLL("libc.so.6", use_errno=True)   # Termux/Android এ "libc.so"
+libc.recvmmsg.argtypes = [c_int, POINTER(mmsghdr), c_uint, c_int, c_void_p]
+libc.recvmmsg.restype = c_int
+
+VLEN = 64                 # একবারে সর্বোচ্চ কতগুলো প্যাকেট
+BUFSZ = 2048              # প্রতি প্যাকেটের সর্বোচ্চ সাইজ
+MSG_WAITFORONE = 0x10000  # অন্তত ১টা এলেই ফেরত দাও, বাকিটার জন্য অপেক্ষা নয়
+
+
+def receiver(port, rcvbuf, counter):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
+    s.bind(("0.0.0.0", port))
+    fd = s.fileno()
+
+    # বাফার একবারই বানাও, বারবার ব্যবহার করো
+    bufs = ctypes.create_string_buffer(VLEN * BUFSZ)
+    base = ctypes.addressof(bufs)
+    iovs = (iovec * VLEN)()
+    msgs = (mmsghdr * VLEN)()
+    for i in range(VLEN):
+        iovs[i].iov_base = base + i * BUFSZ
+        iovs[i].iov_len = BUFSZ
+        h = msgs[i].msg_hdr
+        h.msg_name = None          # সোর্স ঠিকানা লাগবে না (দ্রুত)
+        h.msg_namelen = 0
+        h.msg_iov = ctypes.pointer(iovs[i])
+        h.msg_iovlen = 1
+
+    recvmmsg = libc.recvmmsg
+    local = 0
+    last = time.monotonic()
+    while True:
+        n = recvmmsg(fd, msgs, VLEN, MSG_WAITFORONE, None)
+        if n < 0:
+            err = ctypes.get_errno()
+            if err == 4:           # EINTR
+                continue
+            raise OSError(err, os.strerror(err))
+        local += n
+
+        # দরকার হলে i-তম প্যাকেটের ডেটা:
+        # data = ctypes.string_at(base + i * BUFSZ, msgs[i].msg_len)
+
+        now = time.monotonic()
+        if now - last >= 1.0:      # প্রতি সেকেন্ডে একবার শেয়ার্ড কাউন্টারে লেখো
+            with counter.get_lock():
+                counter.value += local
+            local = 0
+            last = now
+
+
+if __name__ == "__main__":
+    import sys
+    procs = int(sys.argv[1]) if len(sys.argv) > 1 else os.cpu_count()
+    counter = mp.Value("Q", 0)
+    ps = [mp.Process(target=receiver, args=(9999, 64 * 1024 * 1024, counter), daemon=True)
+          for _ in range(procs)]
+    for p in ps:
+        p.start()
+
+    prev = 0
+    while True:
+        time.sleep(1)
+        cur = counter.value
+        print(f"recv/s = {cur - prev:,}")
+        prev = cur

@@ -1,0 +1,11 @@
+এটা --db-url থেকে ঠিক হয়:
+
+ডেটা দেখতে
+psql mydb -c "SELECT count(*) FROM readings;"
+psql mydb -c "SELECT * FROM readings LIMIT 10;"
+
+psql mydb -c "DROP TABLE readings;"
+
+CREATE TABLE IF NOT EXISTS readings (...)
+
+python udp_pg.py --procs 4 --db-url "postgresql://localhost/mydb"

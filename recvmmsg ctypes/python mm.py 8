@@ -16,7 +16,7 @@ class msghdr(ctypes.Structure):
 class mmsghdr(ctypes.Structure):
     _fields_ = [("msg_hdr", msghdr), ("msg_len", c_uint)]
 
-libc = ctypes.CDLL("libc.so.6", use_errno=True)   # Termux/Android এ "libc.so"
+libc = ctypes.CDLL("libc.so", use_errno=True) Termux/Android এ "libc.so"
 libc.recvmmsg.argtypes = [c_int, POINTER(mmsghdr), c_uint, c_int, c_void_p]
 libc.recvmmsg.restype = c_int
 

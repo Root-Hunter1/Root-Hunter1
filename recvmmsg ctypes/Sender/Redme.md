@@ -1,3 +1,5 @@
+compaline:
+
 clang -O2 -pthread -o sender2 sender2.c
 
 # Terminal 1: Server (initially without DB)

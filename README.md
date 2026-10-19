@@ -144,14 +144,12 @@ This project is licensed under the MIT License. See the `LICENSE` file for more 
 - GitHub: @Root-Hunter1
 - Repository: https://github.com/Root-Hunter1/Root-Hunter1
 - Email: limonrakib61@gmail.com
-- Portfolio / Website: https://
 
 ## Profile Summary
 
 - Name: Your Name
 - Role: Developer / Algorithm Enthusiast
 - Interests: Algorithms, Data Structures, Programming, Problem Solving
-- Location: usa
 - GitHub: https://github.com/Root-Hunter1
 
 ## Acknowledgements

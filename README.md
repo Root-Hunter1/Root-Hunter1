@@ -147,7 +147,7 @@ This project is licensed under the MIT License. See the `LICENSE` file for more 
 
 ## Profile Summary
 
-- Name: Your Name
+- Name: Root Hunter 
 - Role: Developer / Algorithm Enthusiast
 - Interests: Algorithms, Data Structures, Programming, Problem Solving
 - GitHub: https://github.com/Root-Hunter1

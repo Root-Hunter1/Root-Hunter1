@@ -12,13 +12,6 @@
 > Build with curiosity.
 > Improve with every iteration.
 
-## Getting Started
-
-Clone the repository:
-
-```bash
-https://github.com/Root-Hunter1/Root-Hunter1
-
 # Root-Hunter1
 
 A collection of algorithms and data structures implemented for learning and educational purposes.

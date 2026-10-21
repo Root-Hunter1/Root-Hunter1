@@ -17,7 +17,7 @@ Please report security issues privately so we can investigate and, if needed, fi
 
 Preferred reporting options:
 - Create a private GitHub Security Advisory (recommended) — https://github.com/Root-Hunter1/Root-Hunter1/security/advisories (if available)
-- Or email: security@example.com (replace with your address)
+- Or email: roothunter.code@gmail.com 
 - If you need to encrypt your report, use our PGP key: <PGP_KEY_FINGERPRINT> (replace with actual fingerprint)
 
 When reporting, please include:

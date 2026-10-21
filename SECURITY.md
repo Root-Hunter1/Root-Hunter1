@@ -55,4 +55,4 @@ We appreciate responsible disclosure. Thank you for helping improve the security
 
 - Repo: https://github.com/Root-Hunter1/Root-Hunter1
 - Maintainer: @Root-Hunter1
-- Email: limonrakib61@gmail.com
+- Email: roothunter.code@gmail.com

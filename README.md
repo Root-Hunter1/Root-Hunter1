@@ -219,7 +219,7 @@ This project includes a license file. Please review `LICENSE` for usage terms an
 
 - GitHub: @Root-Hunter1
 - Repository: https://github.com/Root-Hunter1/Root-Hunter1
-- Email: limonrakib61@gmail.com
+- Email: roothunter.code@gmail.com
 
 ## Profile Summary
 

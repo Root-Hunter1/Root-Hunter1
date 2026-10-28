@@ -228,6 +228,9 @@ This project includes a license file. Please review `LICENSE` for usage terms an
 - Interests: Algorithms, Data Structures, Programming, Problem Solving
 - GitHub: https://github.com/Root-Hunter1
 
+# This real fully scripts Reprojity:
+- GitHub: Root-Hunter1/iot-sensor-dashboard
+
 ## Final Note
 
 This repository is a practical learning space where code is used to explore ideas, improve understanding, and build skill through experimentation.

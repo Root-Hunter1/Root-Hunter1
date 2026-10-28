@@ -221,15 +221,16 @@ This project includes a license file. Please review `LICENSE` for usage terms an
 - Repository: https://github.com/Root-Hunter1/Root-Hunter1
 - Email: roothunter.code@gmail.com
 
+# This real fully scripts Reprojity:
+
+- GitHub: https://github.com/Root-Hunter1/iot-sensor-dashboard
+
 ## Profile Summary
 
 - Name: Root Hunter
 - Role: Developer / Algorithm Enthusiast
 - Interests: Algorithms, Data Structures, Programming, Problem Solving
 - GitHub: https://github.com/Root-Hunter1
-
-# This real fully scripts Reprojity:
-- GitHub: https://github.com/Root-Hunter1/iot-sensor-dashboard
 
 ## Final Note
 

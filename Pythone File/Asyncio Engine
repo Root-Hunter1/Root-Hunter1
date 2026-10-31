@@ -40,7 +40,7 @@ class AsyncDNSEngine:
 async def main():
     os.system("clear")
     print("=========================================")
-    print("[+] PROJECT TIGER - ASYNCIO CORE ENGINE  ")
+    print(     "[+] PROJECT ASYNCIO CORE ENGINE     ")
     print("=========================================")
     
     ip = "127.0.0.1"

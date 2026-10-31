@@ -15,7 +15,7 @@ class DNSCoreEngine:
         }
 
     def handle_traffic(self, server_socket, client_address, raw_packet, current_thread):
-        print(f"\n[Thread #{current_thread}] 🚀 Object Worker Engaged for Client: {client_address}")
+        print(f"\n[Thread #{current_thread}] Object Worker Engaged for Client: {client_address}")
 
         try:
             tx_id = (raw_packet[0] << 8) + raw_packet[1]

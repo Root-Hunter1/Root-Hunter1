@@ -13,7 +13,7 @@ class AsyncDNSEngine:
             "facebook.com": "157.240.22.35"
         }
     async def process_packet(self, transport, data, addr, current_id):
-        print(f"\n[Packet #{current_id}] 🚀 Async Worker Activated for: {addr}")
+        print(f"\n[Packet #{current_id}] Async Worker Activated for: {addr}")
         
         try:
             tx_id = (data[0] << 8) + data[1]

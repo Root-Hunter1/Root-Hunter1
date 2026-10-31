@@ -12,7 +12,7 @@ target_url = input("Enter Target Website:")
 print(f"[+]Fecthing Link From {target_url}...")
 print("-" * 40)
 
-headers = {"user_Agent": "Mozila/5.0 (windows NT 10.0; win64;>
+headers = {"user_Agent": "Mozila/5.0 (windows NT 10.0; win64;)"}
 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 try:

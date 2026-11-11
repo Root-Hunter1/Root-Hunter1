@@ -124,6 +124,7 @@ This repository also contains exploratory projects for testing code ideas, learn
 ## Tech Stack
 
 - Python
+- C++
 - C
 - Go
 - Asyncio

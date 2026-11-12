@@ -131,7 +131,6 @@ This repository also contains exploratory projects for testing code ideas, learn
 - UDP/TCP networking
 - `ctypes`
 - Git and GitHub
-- Conda environment management
 
 ## Getting Started
 

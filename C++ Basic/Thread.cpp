@@ -31,7 +31,7 @@ int main() {
 #include <iostream>
 #include <thread>
 
-//#char (bytes/bits) char name[] = "Hacker"
+//#char (bytes/bits) example: char name[] = "Hacker"
 //little name//
 void function1(char symbol) { 
    for (int i=0; i < 200; i++)

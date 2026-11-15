@@ -1,8 +1,8 @@
-import socket, time
+import socket, time 
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 start = time.time()
-N = 100000
+N = 100000 //#N = UP Now
 for i in range(N):
     s.sendto(b"test packet %d" % i, ("127.0.0.1", 9999))
 elapsed = time.time() - start

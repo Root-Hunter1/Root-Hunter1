@@ -23,6 +23,7 @@ This repository brings together:
 - asynchronous programming with `asyncio`
 - multi-threading and high-throughput sender examples
 - Go learning examples
+- C++ learning concept 
 - low-level and system-oriented programming exploration
 - educational code designed to improve understanding through practice
 

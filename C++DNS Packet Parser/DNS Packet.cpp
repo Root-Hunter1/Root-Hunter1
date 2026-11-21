@@ -27,6 +27,7 @@ int main() {
         0x00, 0x00,             // authority = 0
         0x00, 0x00,             // additional = 0
         // Question: google.com
+        3, 'w','w','w',
         6, 'g','o','o','g','l','e',
         3, 'c','o','m',
         0,                      // End of Name
@@ -53,6 +54,13 @@ int main() {
         pos += len;
         if (p[pos] != 0) name += ".";
     }
+    pos++; // শেষের 0 টপকানো
+
+    uint16_t qtype  = read16(p + pos);
+    uint16_t qclass = read16(p + pos + 2);
+
+    std::cout << "Type: " << qtype << std::endl;
+    std::cout << "Class: " << qclass << std::endl;
     cout << "Domain: " << name << endl;
 
     return 0;

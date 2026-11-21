@@ -2,6 +2,10 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 using namespace std;
 
 // DNS header first: 12 byte
@@ -62,6 +66,31 @@ int main() {
     std::cout << "Type: " << qtype << std::endl;
     std::cout << "Class: " << qclass << std::endl;
     cout << "Domain: " << name << endl;
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+if (sock < 0) { perror("socket"); return 1; }
 
-    return 0;
+// ৫ সেকেন্ডের timeout, নইলে উত্তর না এলে আটকে থাকবে
+struct timeval tv{5, 0};
+setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+sockaddr_in server{};
+server.sin_family = AF_INET;
+server.sin_port = htons(53);
+inet_pton(AF_INET, "8.8.8.8", &server.sin_addr);
+
+ssize_t sent = sendto(sock, packet.data(), packet.size(), 0,
+                      (sockaddr*)&server, sizeof(server));
+std::cout << "Sent bytes: " << sent << std::endl;
+
+uint8_t buf[512];
+ssize_t n = recvfrom(sock, buf, sizeof(buf), 0, nullptr, nullptr);
+if (n < 0) { perror("recvfrom"); close(sock); return 1; }
+std::cout << "Received bytes: " << n << std::endl;
+
+// উত্তরের header পড়া
+std::cout << "Answer count: " << read16(buf + 6) << std::endl;
+
+close(sock);
+  
+return 0;
 }

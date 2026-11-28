@@ -84,6 +84,8 @@ Usage terms are available in [LICENSE](LICENSE).
 ## Maintainer
 
 - GitHub: [@Root-Hunter1](https://github.com/Root-Hunter1)
+- GitHub: [https://github.com/Root-Hunter1/game-full-script-website-]
+- GitHub: [https://github.com/Root-Hunter1/iot-sensor-dashboard]
 - Email: roothuntercode@gmai.com
 
 ---

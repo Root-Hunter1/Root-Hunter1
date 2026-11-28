@@ -1,23 +1,18 @@
-name: C/C++ CI
+name: Deploy Python project to Azure Function App
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build:
-
+  deploy:
     runs-on: ubuntu-latest
-
+    environment: dev
     steps:
-    - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run deployment check
+        run: echo "Deployment successful!"

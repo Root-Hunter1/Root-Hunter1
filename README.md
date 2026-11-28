@@ -41,11 +41,7 @@ Root-Hunter1/
 ├── LICENSE
 └── SECURITY.md
 
-
-
-
-
-#Getting Started
+## Getting Started
 
 git clone https://github.com/Root-Hunter1/Root-Hunter1.git
 cd Root-Hunter1
@@ -53,7 +49,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-#Example
+## Example
 
 from algorithms.sorting.quick_sort import quick_sort
 

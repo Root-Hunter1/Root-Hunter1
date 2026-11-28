@@ -14,7 +14,7 @@ A learning-focused repository containing multiple programming experiments, mini-
 This repository is not a single production application. Instead, it is a collection of independent code samples created to explore different concepts and technologies in a practical way.
 
 ## Overview
-
+.
 This repository brings together:
 
 - Python programming experiments

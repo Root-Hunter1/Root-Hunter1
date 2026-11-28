@@ -128,6 +128,7 @@ This repository also contains exploratory projects for testing code ideas, learn
 - C++
 - C
 - Go
+- Rust 
 - Asyncio
 - UDP/TCP networking
 - `ctypes`

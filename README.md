@@ -55,3 +55,23 @@ from algorithms.sorting.quick_sort import quick_sort
 
 arr = [5, 2, 9, 1, 7]
 print(quick_sort(arr))
+
+#Testinq
+'bash,
+pytest
+
+#Contributing
+Contributions should be readable, educational, and easy to maintain.
+
+#Security
+For security issues, please review SECURITY.md
+
+#License
+Usage terms are available in LICENSE .
+
+#Maintainer
+
+· GitHub: @Root-Hunter1
+· Email:roothuntercode@gmai.com
+
+#Created for educational purposes

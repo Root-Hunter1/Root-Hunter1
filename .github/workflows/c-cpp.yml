@@ -1,18 +1,24 @@
-name: Deploy Python project to Azure Function App
+name: C++ Single File CI
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
-  deploy:
+  compile-cpp:
     runs-on: ubuntu-latest
-    environment: dev
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run deployment check
-        run: echo "Deployment successful!"
+      - name: Install g++ compiler
+        run: sudo apt-get update && sudo apt-get install -y g++
+
+      - name: Compile all .cpp files
+        run: |
+          find . -name "*.cpp" -print0 | while IFS= read -r -d '' file; do
+            echo "Checking $file..."
+            g++ -fsyntax-only "$file"
+          done
+          echo "All C++ (.cpp) files checked successfully!"

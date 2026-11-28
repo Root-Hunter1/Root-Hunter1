@@ -20,7 +20,7 @@ This repository brings together:
 - Python programming experiments
 - data structure and algorithm practice
 - networking and UDP communication examples
-- asynchronous programming with `asyncio`.
+- asynchronous programming with `asyncio`
 - multi-threading and high-throughput sender examples
 - Go learning examples
 - C++ learning concept 

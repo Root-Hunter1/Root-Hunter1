@@ -1,4 +1,4 @@
-<p align="center">
+ <p align="center">
   <img src="2046199c-b6ad-4dd3-83be-a11ee4a96a48.png" width="100%" alt="Root-Hunter1 banner">
 </p>
 
@@ -40,38 +40,52 @@ Root-Hunter1/
 ├── README.md
 ├── LICENSE
 └── SECURITY.md
+```
 
 ## Getting Started
 
+```bash
 git clone https://github.com/Root-Hunter1/Root-Hunter1.git
 cd Root-Hunter1
+
 python3 -m venv venv
 source venv/bin/activate
+
 pip install -r requirements.txt
+```
 
 ## Example
 
+```python
 from algorithms.sorting.quick_sort import quick_sort
 
 arr = [5, 2, 9, 1, 7]
 print(quick_sort(arr))
+```
 
-#Testinq
-'bash,
+## Testing
+
+```bash
 pytest
+```
 
-#Contributing
+## Contributing
+
 Contributions should be readable, educational, and easy to maintain.
 
-#Security
-For security issues, please review SECURITY.md
+## Security
 
-#License
-Usage terms are available in LICENSE .
+For security issues, please review [SECURITY.md](SECURITY.md).
 
-#Maintainer
+## License
 
-· GitHub: @Root-Hunter1
-· Email:roothuntercode@gmai.com
+Usage terms are available in [LICENSE](LICENSE).
 
-#Created for educational purposes
+## Maintainer
+
+- GitHub: [@Root-Hunter1](https://github.com/Root-Hunter1)
+- Email: roothuntercode@gmai.com
+
+---
+
+**Created for educational purposes.**

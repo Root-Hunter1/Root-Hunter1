@@ -226,7 +226,7 @@ This project includes a license file. Please review `LICENSE` for usage terms an
 # This is a fully scripted repository
 
 - GitHub: https://github.com/Root-Hunter1/iot-sensor-dashboard
-- GitHub: https://github.com/Root-Hunter1/game-full-script-website-
+- GitHub: https://github.com/Root-Hunter1/game-full-script-website
 ## Profile Summary
 
 - Name: Root Hunter

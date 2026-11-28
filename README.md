@@ -1,1 +1,42 @@
+<p align="center">
+  <img src="2046199c-b6ad-4dd3-83be-a11ee4a96a48.png" width="100%" alt="Root-Hunter1 banner">
+</p>
 
+<h1 align="center">Root-Hunter1</h1>
+
+<p align="center">
+  <strong>Educational repository for algorithms, networking, and programming experiments.</strong>
+</p>
+
+## Overview
+
+Root-Hunter1 is a learning-focused collection of Python projects, algorithms, data structures, networking examples, and system-level experiments.
+
+## Included Topics
+
+- Python programming
+- Algorithms and data structures
+- UDP/TCP networking
+- Asyncio
+- Multi-threading
+- C, C++, Go, and Rust
+- Performance and concurrency
+- Practical coding experiments
+
+## Project Structure
+
+```text
+Root-Hunter1/
+├── algorithms/
+├── data_structures/
+├── examples/
+├── tests/
+├── Enterprise_UDP_Server/
+├── Go Golang/
+├── udp server/
+├── Asyncio High Speed Sender Engine
+├── Multi-Threaded Request Sender Engine
+├── Python Package using Conda
+├── README.md
+├── LICENSE
+└── SECURITY.md

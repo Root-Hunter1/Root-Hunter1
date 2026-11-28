@@ -49,4 +49,9 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-#
+#Example
+
+from algorithms.sorting.quick_sort import quick_sort
+
+arr = [5, 2, 9, 1, 7]
+print(quick_sort(arr))

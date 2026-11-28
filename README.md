@@ -131,7 +131,7 @@ This repository also contains exploratory projects for testing code ideas, learn
 - Rust 
 - Asyncio
 - UDP/TCP networking
-- `ctypes`
+- ctypes
 - Git and GitHub
 
 ## Getting Started
